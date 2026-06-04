@@ -136,48 +136,50 @@ Single Python project: package `strava_mcp/`, tests under `tests/` at repo root.
 
 ## Phase 6: User Story 4 - Read full per-activity detail (Priority: P2)
 
-**Goal**: Single-unit enrichment (detail + laps + comments + kudos + zones + embedded segment efforts), visibility flag, and the per-facet tools.
+**Goal**: Single-unit enrichment (detail + laps + comments + kudos + zones + embedded segment efforts **+ streams**), visibility flag stamped last, and the per-facet tools.
 
-**Independent Test**: An enriched activity exposes full detail + each facet and its efforts; an unenriched activity returns `not_yet_synced`; no partial activity is ever visible.
+> **Visibility invariant (data-model R8, Constitution III):** "fully enriched" **includes streams**. The enrichment transaction therefore writes streams too, and `enriched_at` is stamped **only after streams are persisted**. US4 owns the *enrichment write path incl. streams*; US5 (Phase 7) adds the streams *read surface, key-filtering, and the fully-synced flag*. This keeps every shippable state free of stream-less visible activities.
+
+**Independent Test**: An enriched activity (streams present) exposes full detail + each facet and its efforts; an activity not yet fully enriched (incl. streams) returns `not_yet_synced`; no partial activity is ever visible.
 
 **Depends on**: US3.
 
 ### Tests for User Story 4 ⚠️
 
-- [ ] T036 [P] [US4] Integration test single-transaction enrichment + `enriched_at` visibility (no partial exposure) + efforts populated from embedded data in `tests/integration/test_enrichment.py`.
+- [ ] T036 [P] [US4] Integration test single-transaction enrichment **including streams** + `enriched_at` stamped last (no partial exposure; an activity missing streams stays `not_yet_synced`) + efforts populated from embedded data, in `tests/integration/test_enrichment.py`.
 - [ ] T037 [P] [US4] Contract test `get_laps`/`get_comments`/`get_kudos`/`get_activity_zones` and full `get_activity` in `tests/contract/test_enrichment_tools.py`.
 
 ### Implementation for User Story 4
 
-- [ ] T038 [P] [US4] Extend `strava_mcp/db/repositories/activities.py` with writers for `laps`, `comments`, `kudos`, `activity_zones`, and `segment_efforts` (all dual-write).
-- [ ] T039 [US4] Extend `strava_mcp/sync/resources/activities.py` — enrichment unit: fetch `DetailedActivity` + laps + comments + kudos + zones, populate `segment_efforts` from embedded `segment_efforts[]`/`best_efforts[]`, write all in one transaction and stamp `enriched_at` last.
+- [ ] T038 [P] [US4] Extend `strava_mcp/db/repositories/activities.py` with writers for `laps`, `comments`, `kudos`, `activity_zones`, and `segment_efforts`, and add `strava_mcp/db/repositories/streams.py` (write the `activity_streams` row) — all dual-write.
+- [ ] T039 [US4] Extend `strava_mcp/sync/resources/activities.py` — enrichment unit: fetch `DetailedActivity` + laps + comments + kudos + zones + **streams** (`/activities/{id}/streams?keys=...&key_by_type=true`), populate `segment_efforts` from embedded `segment_efforts[]`/`best_efforts[]`, write all (including the `activity_streams` row) in one transaction, and stamp `enriched_at` **last, only after streams are stored**.
 - [ ] T040 [US4] Extend `strava_mcp/mcp/tools/activities.py` — `get_activity` returns full `DetailedActivity`; add `get_laps`/`get_comments`/`get_kudos`/`get_activity_zones` (each `not_yet_synced`-aware).
 
-**Checkpoint**: Activities visible only when fully enriched; deep per-activity reads work.
+**Checkpoint**: Activities visible only when fully enriched **including streams**; deep per-activity reads work.
 
 ---
 
 ## Phase 7: User Story 5 - Access activity streams (Priority: P2)
 
-**Goal**: Streams fetched as part of enrichment, stored per type with metadata; `get_activity_streams`; fully-synced now requires streams.
+**Goal**: Expose the streams stored by the US4 enrichment unit to agents (with key-filtering) and finalize the **fully-synced** definition. (Streams are *written* in US4 so the visibility invariant holds; US5 owns the *read surface* + fully-synced flag.)
 
-**Independent Test**: Enriched activity returns requested stream types with metadata; unreached activity returns `not_yet_synced`; `fully_synced` flips true only once all activities carry streams and the frontier reached the first-ever activity.
+**Independent Test**: An enriched activity returns requested stream types with metadata; an activity not fully enriched returns `not_yet_synced`; `fully_synced` flips true only once all activities carry streams and the frontier reached the first-ever activity.
 
 **Depends on**: US4.
 
 ### Tests for User Story 5 ⚠️
 
-- [ ] T041 [P] [US5] Integration test streams stored per type + `fully_synced` condition in `tests/integration/test_streams.py`.
-- [ ] T042 [P] [US5] Contract test `get_activity_streams(id, keys?)` incl. `not_yet_synced` in `tests/contract/test_streams_tool.py`.
+- [ ] T041 [P] [US5] Integration test streams retrievable per type + `fully_synced` condition flips only after all activities carry streams, in `tests/integration/test_streams.py`.
+- [ ] T042 [P] [US5] Contract test `get_activity_streams(id, keys?)` incl. key-filtering and `not_yet_synced` in `tests/contract/test_streams_tool.py`.
 
 ### Implementation for User Story 5
 
-- [ ] T043 [P] [US5] Implement `strava_mcp/db/repositories/streams.py` — write/read the `activity_streams` row (per-type JSON + metadata, dual-write).
-- [ ] T044 [US5] Extend `strava_mcp/sync/resources/activities.py` enrichment to fetch `/activities/{id}/streams?keys=...&key_by_type=true` and persist within the same enrichment transaction.
-- [ ] T045 [US5] Extend `strava_mcp/sync/state.py` — `fully_synced` = backfill_complete AND every activity has streams; reflect in checkpoints.
-- [ ] T046 [P] [US5] Implement `strava_mcp/mcp/tools/streams.py` — `get_activity_streams(id, keys?)`.
+- [ ] T043 [P] [US5] Extend `strava_mcp/db/repositories/streams.py` (created in US4/T038) with read + **key-filtering** (return only requested stream types) and `types` metadata.
+- [ ] T044 [P] [US5] Implement `strava_mcp/mcp/tools/streams.py` — `get_activity_streams(id, keys?)` (`not_yet_synced`-aware).
+- [ ] T045 [US5] Extend `strava_mcp/sync/state.py` — `fully_synced` = backfill_complete AND every activity has streams; surface it in `sync_status`.
+- [ ] T046 [P] [US5] Regression guard: assert the enrichment transaction (US4) always persists an `activity_streams` row before stamping `enriched_at`, in `tests/integration/test_enrichment_streams_invariant.py`.
 
-**Checkpoint**: "Fully synced" definition complete; stream reads work.
+**Checkpoint**: "Fully synced" definition complete; stream reads + key-filtering work.
 
 ---
 
@@ -263,6 +265,15 @@ Single Python project: package `strava_mcp/`, tests under `tests/` at repo root.
 - [ ] T068 [P] Vocabulary-discipline check: scan `strava_mcp/` for banned synonyms (import/refresh/cache/etc. per CONTEXT.md) in `tests/unit/test_vocabulary.py`.
 - [ ] T069 Run all `quickstart.md` scenarios end-to-end against fixtures and record results.
 - [ ] T070 [P] Final `uv run ruff check .` + `uv run mypy strava_mcp` clean; cross-link ADRs 0001–0003 from code docstrings where relevant.
+
+### Remediation coverage (added from `/speckit-analyze`)
+
+> These close coverage gaps flagged in the analysis. IDs are sequential at end-of-file, but each is tagged with the story/phase it should actually be executed within.
+
+- [ ] T071 [P] [US3] Integration test: backfill **termination** when the frontier reaches the first-ever activity, and the **empty-account** case → `backfill_complete` flips correctly, in `tests/integration/test_backfill_complete.py`. *(Run during US3; closes spec Edge Case "Empty account / first-ever activity".)*
+- [ ] T072 [P] Unit test: log **redaction** never emits token-like secrets to stdout or the rotating file, in `tests/unit/test_log_redaction.py`. *(Closes SC-010 / FR-023; pair with T009.)*
+- [ ] T073 [P] Integration test: a tool **read succeeds concurrently** with the worker writing under WAL (no blocking either way), in `tests/integration/test_concurrent_read.py`. *(Closes spec Edge Case "Concurrent agent reads during backfill".)*
+- [ ] T074 [P] Contract test: **multiple MCP clients** connect and the server persists across simulated sessions, in `tests/contract/test_multi_client.py`. *(Closes FR-007.)*
 
 ---
 

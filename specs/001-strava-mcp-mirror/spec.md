@@ -362,8 +362,8 @@ optional sport and confirm the roll-ups match the underlying activities.
 
 - **SC-001**: An operator completes first-time authorization in a single sitting (one
   consent approval, no manual code copying) and reaches a running, serving mirror.
-- **SC-002**: An agent can retrieve the athlete profile within seconds of the server
-  starting, without the agent making any Strava call.
+- **SC-002**: Once the athlete profile is mirrored, an agent retrieves it in under 2 seconds
+  (a local DB read), and the agent makes no Strava call.
 - **SC-003**: Recent activities are queryable from the mirror shortly after backfill begins
   (newest-first), well before the full history is present.
 - **SC-004**: An interrupted-and-restarted mirror re-fetches zero already-stored activities.

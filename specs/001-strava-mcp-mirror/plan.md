@@ -158,6 +158,7 @@ strava_mcp/
 ├── __init__.py
 ├── __main__.py          # CLI entrypoints: `auth`, `serve` (sync runs inside serve)
 ├── config.py            # Settings from env/.env: client creds, paths, port, scopes, sync window
+├── logging.py           # Dual sink (stdout + rotating ./.database/strava-mcp.log) + secret redaction
 ├── auth/
 │   ├── __init__.py
 │   ├── oauth.py         # Authorization-code flow + local callback server on 127.0.0.1
@@ -177,8 +178,7 @@ strava_mcp/
 │       ├── streams.py
 │       ├── gear.py
 │       ├── routes.py
-│       ├── segments.py
-│       └── sync_state.py
+│       └── segments.py    # (sync_state access lives in sync/state.py, not a repository)
 ├── sync/
 │   ├── __init__.py
 │   ├── orchestrator.py  # Worker state machine: BOOTSTRAP→BACKFILL→POLL; checkpoints
