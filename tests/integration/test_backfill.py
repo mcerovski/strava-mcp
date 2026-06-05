@@ -132,3 +132,29 @@ def test_budget_exhaustion_triggers_cooldown_then_resumes(conn: sqlite3.Connecti
         1004,
         1005,
     }
+
+
+def test_enrich_page_skips_already_enriched_on_resume(conn: sqlite3.Connection) -> None:
+    """A re-fetched page does not re-enrich activities already stored (zero re-fetch)."""
+    page = _ACTIVITIES[:3]
+    first = Orchestrator(conn, FakeStravaClient(build_handler(page)), _settings())
+    first.activities_syncer.store_summaries(page)
+    first._enrich_page(page)
+    assert (
+        conn.execute("SELECT COUNT(*) FROM activities WHERE enriched_at IS NOT NULL").fetchone()[0]
+        == 3
+    )
+
+    # Second pass over the same page: any enrichment fetch would be a re-fetch.
+    def strict(path: str, params: dict[str, Any]) -> Any:
+        if path.startswith("/activities/"):
+            raise AssertionError(f"re-fetched already-enriched activity: {path}")
+        raise AssertionError(path)
+
+    second = Orchestrator(conn, FakeStravaClient(strict), _settings())
+    second.activities_syncer.store_summaries(page)  # INSERT OR IGNORE → no-op
+    second._enrich_page(page)  # must skip all three without any enrichment call
+    assert (
+        conn.execute("SELECT COUNT(*) FROM activities WHERE enriched_at IS NOT NULL").fetchone()[0]
+        == 3
+    )

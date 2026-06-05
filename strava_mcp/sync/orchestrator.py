@@ -114,6 +114,10 @@ class Orchestrator:
         self.state.ensure()
         self.state.set_phase("BACKFILL")
         before = self.state.snapshot().get("backfill_frontier_epoch")
+        if before:
+            log.info("BACKFILL: resuming from frontier %s", _iso(before))
+        else:
+            log.info("BACKFILL: starting from the newest activity")
         pages = 0
         while not self.stop_event.is_set():
             if max_pages is not None and pages >= max_pages:
@@ -147,9 +151,29 @@ class Orchestrator:
             )
 
     def _enrich_page(self, summaries: list[dict[str, Any]]) -> None:
-        """Enrich each activity in a page as a single visible unit (US4)."""
-        for summary in summaries:
-            self._enrich_one(int(summary["id"]))
+        """Enrich each activity in a page as a single visible unit (US4).
+
+        Activities already enriched (e.g. from a page re-fetched after a restart)
+        are skipped — no re-fetch — so resume is effectively zero-cost beyond the
+        summary listing. Each newly-enriched activity is logged for visibility.
+        """
+        total = len(summaries)
+        for index, summary in enumerate(summaries, start=1):
+            if self.stop_event.is_set():
+                return
+            activity_id = int(summary["id"])
+            if self.activities_repo.status(activity_id) == "enriched":
+                continue  # already enriched on a previous run — skip, no re-fetch
+            self._enrich_one(activity_id)
+            if self.activities_repo.status(activity_id) == "enriched":
+                date = (summary.get("start_date") or "?")[:10]
+                log.info(
+                    "enriched activity %s (%s) — %d/%d this page",
+                    activity_id,
+                    date,
+                    index,
+                    total,
+                )
 
     def _enrich_one(self, activity_id: int) -> None:
         """Enrich one activity, cooling down and retrying on rate limits.
@@ -228,6 +252,19 @@ class Orchestrator:
 
         return isinstance(exc, (BudgetExhausted, RateLimitExceeded))
 
+    def _budget_summary(self) -> str:
+        """Human-readable read-budget usage for cooldown logs (or empty)."""
+        if self.budget is None:
+            return ""
+        parts: list[str] = []
+        if self.budget.read_15min is not None:
+            u = self.budget.read_15min
+            parts.append(f"read {u.used}/{u.limit} (15min)")
+        if self.budget.read_daily is not None:
+            u = self.budget.read_daily
+            parts.append(f"{u.used}/{u.limit} (daily)")
+        return f" [{', '.join(parts)}]" if parts else ""
+
     def _cooldown(self, exc: BaseException) -> None:
         tier = getattr(exc, "tier", None)
         if self.budget is not None:
@@ -237,8 +274,11 @@ class Orchestrator:
         until = _iso(target)
         self.state.set_phase("COOLDOWN")
         self.state.set_cooldown(until)
+        if self.budget is not None:
+            # Persist the budget snapshot so sync_status reflects it during cooldown.
+            self.state.set_rate_limit(self.budget.snapshot())
         self.state.append_run_log({"phase": "COOLDOWN", "until": until, "tier": tier})
-        log.info("COOLDOWN until %s (tier=%s)", until, tier)
+        log.info("COOLDOWN until %s (tier=%s)%s", until, tier, self._budget_summary())
         self._sleep_until(target)
         self.state.set_cooldown(None)
         self.state.set_phase("BACKFILL")
