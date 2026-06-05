@@ -149,6 +149,114 @@ class ActivitiesRepository(BaseRepository):
         return [self._summary_view(row) for row in rows]
 
     @staticmethod
+    def _enriched_filter(
+        after_epoch: int | None,
+        before_epoch: int | None,
+        sport_type: str | None,
+    ) -> tuple[list[str], list[Any]]:
+        """Build the shared WHERE clauses/params for visibility-aware reads."""
+        clauses = ["enriched_at IS NOT NULL"]
+        params: list[Any] = []
+        if after_epoch is not None:
+            clauses.append("start_date_epoch >= ?")
+            params.append(after_epoch)
+        if before_epoch is not None:
+            clauses.append("start_date_epoch <= ?")
+            params.append(before_epoch)
+        if sport_type is not None:
+            clauses.append("sport_type = ?")
+            params.append(sport_type)
+        return clauses, params
+
+    def list_page(
+        self,
+        *,
+        after_epoch: int | None = None,
+        before_epoch: int | None = None,
+        sport_type: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Enriched activities (newest first), paginated via LIMIT/OFFSET (FR-004/015)."""
+        clauses, params = self._enriched_filter(after_epoch, before_epoch, sport_type)
+        params.extend([limit, offset])
+        rows = self.conn.execute(
+            f"SELECT * FROM activities WHERE {' AND '.join(clauses)} "
+            "ORDER BY start_date_epoch DESC LIMIT ? OFFSET ?",
+            params,
+        ).fetchall()
+        return [self._summary_view(row) for row in rows]
+
+    def count_page(
+        self,
+        *,
+        after_epoch: int | None = None,
+        before_epoch: int | None = None,
+        sport_type: str | None = None,
+    ) -> int:
+        """Total enriched activities matching the filters (for the pager)."""
+        clauses, params = self._enriched_filter(after_epoch, before_epoch, sport_type)
+        return int(
+            self.conn.execute(
+                f"SELECT COUNT(*) FROM activities WHERE {' AND '.join(clauses)}", params
+            ).fetchone()[0]
+        )
+
+    # SQL expression yielding each row's bucket start date, per grouping period.
+    _ROLLUP_EXPR = {
+        "monthly": "strftime('%Y-%m-01', start_date)",
+        "yearly": "strftime('%Y-01-01', start_date)",
+        # Monday of the activity's ISO week.
+        "weekly": (
+            "date(start_date, '-' || "
+            "((CAST(strftime('%w', start_date) AS INTEGER) + 6) % 7) || ' days')"
+        ),
+    }
+
+    def training_rollup(
+        self,
+        *,
+        period: str = "weekly",
+        sport_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Per-period rollups (newest period first). ``period`` ∈ {weekly, monthly, yearly}.
+
+        SQL-side aggregation over indexed promoted columns (Constitution IV);
+        only ``enriched_at IS NOT NULL`` activities are counted.
+        """
+        expr = self._ROLLUP_EXPR.get(period)
+        if expr is None:
+            raise ValueError(
+                f"unsupported period: {period!r} (use 'weekly', 'monthly', or 'yearly')"
+            )
+        where = ["enriched_at IS NOT NULL", "start_date IS NOT NULL"]
+        params: list[Any] = []
+        if sport_type is not None:
+            where.append("sport_type = ?")
+            params.append(sport_type)
+        rows = self.conn.execute(
+            f"SELECT {expr} AS period_start, "
+            "COUNT(*) AS count, "
+            "COALESCE(SUM(distance), 0) AS distance, "
+            "COALESCE(SUM(moving_time), 0) AS moving_time, "
+            "COALESCE(SUM(total_elevation_gain), 0) AS total_elevation_gain "
+            "FROM activities "
+            f"WHERE {' AND '.join(where)} "
+            "GROUP BY period_start ORDER BY period_start DESC",
+            params,
+        ).fetchall()
+        return [
+            {
+                "period_start": r["period_start"],
+                "count": r["count"],
+                "distance": r["distance"],
+                "moving_time": r["moving_time"],
+                "total_elevation_gain": r["total_elevation_gain"],
+            }
+            for r in rows
+        ]
+
+    @staticmethod
     def _summary_view(row: Any) -> dict[str, Any]:
         return {
             "id": row["id"],

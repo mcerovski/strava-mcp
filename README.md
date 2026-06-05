@@ -12,8 +12,9 @@ the agent-facing tools **never call Strava**; only a background worker does.
 ## How it works
 
 ```
-uv run strava-mcp auth     # one-time OAuth (full read scopes) → tokens stored in the DB
-uv run strava-mcp serve    # MCP server (loopback) + background sync worker
+uv run strava-mcp auth       # one-time OAuth (full read scopes) → tokens stored in the DB
+uv run strava-mcp serve      # MCP server (loopback) + background sync worker
+uv run strava-mcp dashboard  # read-only local web UI over the mirror (loopback)
 ```
 
 - **Backfill**: a single worker thread pages your activities newest→oldest,
@@ -83,6 +84,28 @@ Refuses to start (printing `run uv run strava-mcp auth`) if the stored token
 lacks a required scope. Otherwise it binds the FastMCP `streamable-http` server
 to `http://127.0.0.1:8720` and starts the worker. It survives across agent
 sessions and multiple clients may connect.
+
+## Dashboard
+
+```bash
+uv run strava-mcp dashboard
+```
+
+A separate, **read-only** local web UI over the same mirror — run it alongside
+`serve` (it reads via read-only connections and never blocks the sync worker, and
+never calls Strava). It binds to `http://127.0.0.1:8722` (override with
+`DASHBOARD_HOST` / `DASHBOARD_PORT`). Routes:
+
+- `/` — filterable, paginated activity list (newest first; enriched activities only)
+- `/activity/{id}` — summary, laps, segment efforts, HR/power zones, and inline-SVG
+  stream graphs
+- `/timeline?period=week|month|year` — aggregate training volume per period
+- `/sync` — current backfill/poll progress (phase, frontier, %, counts, rate-limit
+  budget, cooldown); reflects the latest persisted state on each page reload
+
+The UI is fully offline (no external assets), shows no GPS map in v1, and renders
+no tokens or secrets. If the mirror does not exist yet it prints
+`run uv run strava-mcp serve` rather than failing opaquely.
 
 ## Connecting an MCP client
 

@@ -84,11 +84,20 @@ def _cmd_serve(_args: argparse.Namespace) -> int:
     return run_server()
 
 
+def _cmd_dashboard(_args: argparse.Namespace) -> int:
+    """Start the read-only data dashboard (separate process from serve)."""
+    # Imported lazily so other commands do not pull in the dashboard stack.
+    from strava_mcp.dashboard.server import run_dashboard
+
+    return run_dashboard()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="strava-mcp", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("auth", help="Authorize once with Strava and persist tokens.")
     sub.add_parser("serve", help="Run the MCP server and the background sync worker.")
+    sub.add_parser("dashboard", help="Run the read-only data dashboard (local web UI).")
     return parser
 
 
@@ -99,6 +108,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_auth(args)
     if args.command == "serve":
         return _cmd_serve(args)
+    if args.command == "dashboard":
+        return _cmd_dashboard(args)
     parser.print_help()
     return 2
 
