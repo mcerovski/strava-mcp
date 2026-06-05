@@ -176,6 +176,20 @@ def register_tools(mcp, db_path: Path | str, poll_event=None) -> None:  # type: 
         return summary_tools.summarize_training(db_path, period=period, sport_type=sport_type)
 
 
+def _prewarm_http_stack() -> None:
+    """Fully import the HTTP client stack on the main thread, single-threaded.
+
+    Constructing the first ``httpx.Client`` lazily imports ``httpcore → anyio``.
+    Doing that for the first time inside the worker thread while uvicorn
+    concurrently imports ``anyio`` on the main thread races on CPython's import
+    lock and trips a ``_DeadlockError`` (observed on 3.14). Exercising the same
+    transport-init path here, before any thread starts, removes the race.
+    """
+    import httpx
+
+    httpx.Client().close()
+
+
 def run_server(settings: Settings | None = None) -> int:
     """Entry point for ``strava-mcp serve``."""
     settings = settings or get_settings()
@@ -189,6 +203,9 @@ def run_server(settings: Settings | None = None) -> int:
 
     # Ensure the DB/schema exist before the worker and tools touch it.
     engine.connect(settings.strava_db_path).close()
+
+    # Import the HTTP client stack on the main thread before starting the worker.
+    _prewarm_http_stack()
 
     stop_event = threading.Event()
     from strava_mcp.sync.orchestrator import Worker
