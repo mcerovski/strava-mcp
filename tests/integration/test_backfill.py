@@ -158,3 +158,61 @@ def test_enrich_page_skips_already_enriched_on_resume(conn: sqlite3.Connection) 
         conn.execute("SELECT COUNT(*) FROM activities WHERE enriched_at IS NOT NULL").fetchone()[0]
         == 3
     )
+
+
+def test_bootstrap_athlete_cools_down_on_rate_limit(conn: sqlite3.Connection) -> None:
+    """A 429 on the first athlete fetch cools down and retries — never crashes."""
+    clock = FakeClock(parse_epoch("2026-06-05T07:52:00Z"))
+    slept: list[int] = []
+    raised = {"n": 0}
+
+    def handler(path: str, params: dict[str, Any]) -> Any:
+        if path == "/athlete":
+            if raised["n"] == 0:
+                raised["n"] += 1
+                raise RateLimitExceeded(429, "Rate Limit Exceeded")
+            return {"id": 12345, "username": "a", "bikes": [], "shoes": []}
+        if path == "/athlete/zones":
+            return {}
+        if path.endswith("/stats"):
+            return {}
+        if path.endswith("/routes"):
+            return []
+        if path == "/segments/starred":
+            return []
+        raise AssertionError(path)
+
+    def fake_sleep(seconds: float) -> None:
+        clock.advance(seconds)
+        slept.append(1)
+
+    orch = Orchestrator(
+        conn, FakeStravaClient(handler), _settings(), clock=clock.time, sleep=fake_sleep
+    )
+    orch.bootstrap()  # must not raise
+
+    assert slept, "expected a cooldown before retrying"
+    assert conn.execute("SELECT id FROM athlete").fetchone()["id"] == 12345
+
+
+def test_cooldown_uses_daily_window_for_tierless_429(conn: sqlite3.Connection) -> None:
+    """A raw 429 with the daily budget spent cools to midnight UTC, not :15."""
+    import json
+
+    from strava_mcp.client.ratelimit import RateLimitBudget
+
+    clock = FakeClock(parse_epoch("2026-06-05T12:07:00Z"))
+    budget = RateLimitBudget(clock=clock.time)
+    # Daily usage at the limit; 15-min well under.
+    budget.record({"X-ReadRateLimit-Usage": "10,1000", "X-ReadRateLimit-Limit": "100,1000"})
+
+    orch = Orchestrator(
+        conn, FakeStravaClient(lambda p, q: None), _settings(), budget=budget, clock=clock.time
+    )
+    orch.state.ensure()
+    orch.stop_event.set()  # skip the real wait; we only assert the chosen window
+    orch._cooldown(RateLimitExceeded(429, "Rate Limit Exceeded"))
+
+    entries = json.loads(orch.state.snapshot()["run_log_json"])
+    cooldown = [e for e in entries if e.get("phase") == "COOLDOWN"][-1]
+    assert cooldown["until"] == "2026-06-06T00:00:00Z"  # daily reset, not 12:15

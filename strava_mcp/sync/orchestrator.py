@@ -85,7 +85,10 @@ class Orchestrator:
         self.state.ensure()
         self.state.set_phase("BOOTSTRAP")
         log.info("BOOTSTRAP: mirroring athlete profile/zones/stats")
-        AthleteSyncer(self.client, self.athlete_repo).run()
+        self._run_with_cooldown(
+            lambda: AthleteSyncer(self.client, self.athlete_repo).run(),
+            label="BOOTSTRAP athlete",
+        )
 
         profile = (self.athlete_repo.read() or {}).get("profile") or {}
         athlete_id = int(profile.get("id", 0))
@@ -186,8 +189,11 @@ class Orchestrator:
             label=f"enrichment activity {activity_id}",
         )
 
-    def _run_with_cooldown(self, fn: Callable[[], None], *, label: str) -> None:
-        """Run ``fn``, cooling down + retrying on rate limits; log-and-skip otherwise."""
+    def _run_with_cooldown(self, fn: Callable[[], object], *, label: str) -> None:
+        """Run ``fn``, cooling down + retrying on rate limits; log-and-skip otherwise.
+
+        The callable's return value is ignored.
+        """
         while not self.stop_event.is_set():
             try:
                 fn()
@@ -267,6 +273,11 @@ class Orchestrator:
 
     def _cooldown(self, exc: BaseException) -> None:
         tier = getattr(exc, "tier", None)
+        # A raw 429 (RateLimitExceeded) carries no tier; the budget recorded the
+        # response headers, so consult it to cool to the right window (e.g. wait
+        # until midnight UTC when the daily budget — not the 15-min — is spent).
+        if tier is None and self.budget is not None:
+            tier = self.budget.exhausted_tier()
         if self.budget is not None:
             target = self.budget.cooldown_until_epoch(tier)
         else:
