@@ -1,0 +1,21 @@
+{
+  "id": 550010,
+  "name": "Powell Butte Sprint",
+  "activity_type": "Ride",
+  "distance": 800.0,
+  "average_grade": 6.2,
+  "maximum_grade": 11.0,
+  "elevation_high": 250.0,
+  "elevation_low": 200.0,
+  "climb_category": 1,
+  "city": "Portland",
+  "state": "OR",
+  "country": "United States",
+  "private": false,
+  "starred": true,
+  "total_elevation_gain": 50.0,
+  "effort_count": 120,
+  "athlete_count": 80,
+  "star_count": 30,
+  "map": {"id": "s550010", "polyline": "segment_polyline_data"}
+}

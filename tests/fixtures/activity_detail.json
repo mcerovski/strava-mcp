@@ -1,0 +1,77 @@
+{
+  "id": 900003,
+  "name": "Morning Ride",
+  "sport_type": "Ride",
+  "type": "Ride",
+  "description": "Felt strong today.",
+  "start_date": "2021-05-30T08:00:00Z",
+  "start_date_local": "2021-05-30T01:00:00Z",
+  "distance": 32000.0,
+  "moving_time": 3600,
+  "elapsed_time": 3700,
+  "total_elevation_gain": 350.0,
+  "average_heartrate": 142.0,
+  "max_heartrate": 178.0,
+  "average_watts": 180.0,
+  "max_watts": 600.0,
+  "weighted_average_watts": 195,
+  "kilojoules": 648.0,
+  "average_speed": 8.9,
+  "max_speed": 16.7,
+  "kudos_count": 12,
+  "comment_count": 2,
+  "gear_id": "b1234",
+  "trainer": false,
+  "commute": false,
+  "private": false,
+  "calories": 720.0,
+  "athlete": {"id": 12345},
+  "map": {"id": "a900003", "polyline": "abc_polyline_data", "summary_polyline": "abc_summary"},
+  "splits_metric": [
+    {"distance": 1000.0, "elapsed_time": 110, "moving_time": 108, "split": 1, "average_speed": 9.2},
+    {"distance": 1000.0, "elapsed_time": 115, "moving_time": 112, "split": 2, "average_speed": 8.9}
+  ],
+  "best_efforts": [
+    {
+      "id": 7700001,
+      "name": "1k",
+      "elapsed_time": 108,
+      "moving_time": 108,
+      "start_date": "2021-05-30T08:01:00Z",
+      "distance": 1000.0,
+      "activity": {"id": 900003},
+      "athlete": {"id": 12345}
+    }
+  ],
+  "segment_efforts": [
+    {
+      "id": 8800001,
+      "name": "Tabor Climb",
+      "elapsed_time": 600,
+      "moving_time": 590,
+      "start_date": "2021-05-30T08:10:00Z",
+      "start_date_local": "2021-05-30T01:10:00Z",
+      "distance": 2000.0,
+      "average_watts": 250.0,
+      "pr_rank": 2,
+      "achievements": [],
+      "activity": {"id": 900003},
+      "athlete": {"id": 12345},
+      "segment": {
+        "id": 660001,
+        "name": "Tabor Climb",
+        "activity_type": "Ride",
+        "distance": 2000.0,
+        "average_grade": 5.5,
+        "maximum_grade": 9.0,
+        "elevation_high": 300.0,
+        "elevation_low": 190.0,
+        "climb_category": 2,
+        "city": "Portland",
+        "state": "OR",
+        "country": "United States",
+        "starred": false
+      }
+    }
+  ]
+}

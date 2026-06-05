@@ -1,0 +1,13 @@
+{
+  "id": "b1234",
+  "primary": true,
+  "name": "Road Bike",
+  "nickname": "Speedy",
+  "resource_state": 3,
+  "distance": 1200000.0,
+  "brand_name": "Trek",
+  "model_name": "Emonda",
+  "frame_type": 3,
+  "description": "Carbon road bike",
+  "converted_distance": 1200.0
+}

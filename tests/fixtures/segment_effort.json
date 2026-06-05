@@ -1,0 +1,24 @@
+{
+  "id": 8800001,
+  "name": "Tabor Climb",
+  "elapsed_time": 600,
+  "moving_time": 590,
+  "start_date": "2021-05-30T08:10:00Z",
+  "start_date_local": "2021-05-30T01:10:00Z",
+  "distance": 2000.0,
+  "average_watts": 250.0,
+  "average_heartrate": 165.0,
+  "max_heartrate": 180.0,
+  "pr_rank": 2,
+  "achievements": [],
+  "activity": {"id": 900003},
+  "athlete": {"id": 12345},
+  "segment": {
+    "id": 660001,
+    "name": "Tabor Climb",
+    "activity_type": "Ride",
+    "distance": 2000.0,
+    "average_grade": 5.5,
+    "starred": false
+  }
+}

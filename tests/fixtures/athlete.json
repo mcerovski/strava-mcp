@@ -1,0 +1,22 @@
+{
+  "id": 12345,
+  "username": "athlete_one",
+  "resource_state": 3,
+  "firstname": "Alex",
+  "lastname": "Rider",
+  "city": "Portland",
+  "state": "OR",
+  "country": "United States",
+  "sex": "M",
+  "premium": true,
+  "summit": true,
+  "created_at": "2012-01-01T00:00:00Z",
+  "updated_at": "2021-06-01T00:00:00Z",
+  "weight": 72.0,
+  "bikes": [
+    {"id": "b1234", "primary": true, "name": "Road Bike", "resource_state": 2, "distance": 1200000}
+  ],
+  "shoes": [
+    {"id": "g5678", "primary": true, "name": "Trail Shoes", "resource_state": 2, "distance": 400000}
+  ]
+}

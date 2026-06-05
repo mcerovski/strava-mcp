@@ -1,0 +1,32 @@
+{
+  "time": {
+    "data": [0, 1, 2, 3, 4],
+    "series_type": "distance",
+    "original_size": 5,
+    "resolution": "high"
+  },
+  "distance": {
+    "data": [0.0, 8.9, 17.8, 26.7, 35.6],
+    "series_type": "distance",
+    "original_size": 5,
+    "resolution": "high"
+  },
+  "heartrate": {
+    "data": [120, 130, 140, 150, 145],
+    "series_type": "distance",
+    "original_size": 5,
+    "resolution": "high"
+  },
+  "watts": {
+    "data": [150, 180, 200, 220, 190],
+    "series_type": "distance",
+    "original_size": 5,
+    "resolution": "high"
+  },
+  "latlng": {
+    "data": [[45.5, -122.6], [45.51, -122.61], [45.52, -122.62], [45.53, -122.63], [45.54, -122.64]],
+    "series_type": "distance",
+    "original_size": 5,
+    "resolution": "high"
+  }
+}

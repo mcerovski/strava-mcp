@@ -1,0 +1,21 @@
+[
+  {
+    "type": "heartrate",
+    "sensor_based": true,
+    "distribution_buckets": [
+      {"min": 0, "max": 115, "time": 300},
+      {"min": 115, "max": 152, "time": 1200},
+      {"min": 152, "max": 171, "time": 1500},
+      {"min": 171, "max": 190, "time": 600}
+    ]
+  },
+  {
+    "type": "power",
+    "sensor_based": true,
+    "distribution_buckets": [
+      {"min": 0, "max": 100, "time": 400},
+      {"min": 100, "max": 200, "time": 1800},
+      {"min": 200, "max": 300, "time": 1400}
+    ]
+  }
+]

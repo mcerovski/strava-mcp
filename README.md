@@ -1,2 +1,114 @@
 # strava-mcp
-Give your agent peak into your fitness jurney.
+
+A locally-run [MCP](https://modelcontextprotocol.io) server that maintains a
+complete local mirror of **one athlete's** Strava data and serves it to AI
+agents as pure database reads.
+
+It authorizes once, **backfills** your entire history newest→oldest (with full
+per-activity **enrichment including streams**), then **polls** every 12 hours for
+new activities. Agents query a local SQLite mirror over a loopback HTTP server —
+the agent-facing tools **never call Strava**; only a background worker does.
+
+## How it works
+
+```
+uv run strava-mcp auth     # one-time OAuth (full read scopes) → tokens stored in the DB
+uv run strava-mcp serve    # MCP server (loopback) + background sync worker
+```
+
+- **Backfill**: a single worker thread pages your activities newest→oldest,
+  fetching each activity as one enriched unit (detail + laps + comments + kudos +
+  zones + streams + segment efforts) and writing it atomically. An activity
+  becomes visible to agents only once it is **fully enriched** — partial data is
+  never exposed.
+- **Rate-limit discipline**: the worker stays within Strava's read budget
+  (100/15 min, 1000/day) and, on exhaustion or a 429, **cools down to the known
+  next reset** (the next quarter-hour or midnight UTC) rather than retry-looping.
+  Backfill is checkpointed after every page and resumes with **zero re-fetch**.
+- **Reality check**: a multi-year history legitimately takes **hours to days** to
+  backfill, bounded by the rate limit. Use `sync_status()` to watch progress.
+- **Poll**: once fully synced, the worker polls every 12 h with a 14-day
+  lookback, dedupes by activity id, and **only inserts** new activities — it
+  never mutates or deletes existing rows (read-only / insert-only by design).
+- **Storage**: dual-write — verbatim API JSON into an append-only `raw_responses`
+  store, plus lean normalized tables (indexed promoted columns + `detail_json`).
+
+## Prerequisites
+
+- Python 3.11+ and [`uv`](https://docs.astral.sh/uv/).
+- A Strava API application (`client_id` / `client_secret`) from
+  <https://www.strava.com/settings/api>, with the callback domain allowing
+  `127.0.0.1`.
+
+## Setup
+
+```bash
+cp .env.example .env        # then fill in STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET
+uv sync                     # install locked dependencies
+```
+
+Key settings (see `.env.example` for all):
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `STRAVA_CLIENT_ID` / `STRAVA_CLIENT_SECRET` | — | App credentials (required). |
+| `STRAVA_SCOPES` | `read,read_all,profile:read_all,activity:read,activity:read_all` | Requested read scopes. |
+| `STRAVA_DB_PATH` | `./.database/strava.db` | SQLite mirror path. |
+| `MCP_HOST` / `MCP_PORT` | `127.0.0.1` / `8720` | MCP HTTP bind (loopback only). |
+| `OAUTH_REDIRECT_PORT` | `8721` | Local OAuth callback port. |
+| `SYNC_MAX_REQUESTS` | `900` | Per-window request ceiling the worker self-limits to. |
+
+Secrets live only under `.env` and `./.database/` (both gitignored) and are
+**never logged**.
+
+## Authorize
+
+```bash
+uv run strava-mcp auth
+```
+
+Opens Strava's consent screen for the full **read** scopes (prints the URL if
+headless), auto-captures the redirect on `127.0.0.1`, stores the tokens in the
+DB, and verifies with a one-activity probe read. Read scopes only — the mirror
+never requests write access. If you uncheck a scope, `auth` warns which required
+scope is missing.
+
+## Serve
+
+```bash
+uv run strava-mcp serve
+```
+
+Refuses to start (printing `run uv run strava-mcp auth`) if the stored token
+lacks a required scope. Otherwise it binds the FastMCP `streamable-http` server
+to `http://127.0.0.1:8720` and starts the worker. It survives across agent
+sessions and multiple clients may connect.
+
+## Connecting an MCP client
+
+Point any MCP client at `http://127.0.0.1:8720` (streamable HTTP). Available read
+tools:
+
+- `get_athlete()`
+- `list_activities(after?, before?, sport_type?, limit?)` · `get_activity(id)`
+- `get_laps(id)` · `get_comments(id)` · `get_kudos(id)` · `get_activity_zones(id)`
+- `get_activity_streams(id, keys?)`
+- `list_gear()` · `get_gear(id)`
+- `list_routes()` · `get_route(id)`
+- `list_starred_segments()` · `get_segment(id)` · `list_segment_efforts(segment_id)`
+- `summarize_training(period, sport_type?)`
+- `sync_status()` · `sync_now()`
+
+Any activity the backfill frontier hasn't reached (or hasn't fully enriched)
+returns `{ "status": "not_yet_synced", "id": <id> }`; an unknown id returns
+`{ "status": "not_found", "id": <id> }`.
+
+## Tests
+
+```bash
+uv run pytest            # offline + deterministic: temp SQLite (WAL) + recorded fixtures
+uv run ruff check .      # lint
+uv run mypy strava_mcp   # type check
+```
+
+No test contacts the live Strava API; fixtures derive from `strava-api-spec/`.

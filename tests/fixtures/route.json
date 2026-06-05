@@ -1,0 +1,20 @@
+{
+  "id": "770099",
+  "id_str": "770099",
+  "name": "Hilly Loop",
+  "description": "A scenic hilly loop.",
+  "type": 1,
+  "sub_type": 1,
+  "private": false,
+  "starred": false,
+  "distance": 40000.0,
+  "elevation_gain": 500.0,
+  "estimated_moving_time": 5400,
+  "timestamp": 1622000000,
+  "map": {
+    "id": "r770099",
+    "polyline": "route_polyline_data",
+    "summary_polyline": "route_summary_polyline"
+  },
+  "athlete": {"id": 12345}
+}
