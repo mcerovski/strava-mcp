@@ -88,3 +88,12 @@ class SegmentsRepository(BaseRepository):
             (segment_id,),
         ).fetchall()
         return [json.loads(r["detail_json"]) for r in rows]
+
+    def efforts_for_activity(self, activity_id: int) -> list[dict[str, Any]]:
+        """Segment efforts recorded during one activity (for the dashboard detail view)."""
+        rows = self.conn.execute(
+            "SELECT detail_json FROM segment_efforts WHERE activity_id = ? "
+            "ORDER BY start_date_epoch",
+            (activity_id,),
+        ).fetchall()
+        return [json.loads(r["detail_json"]) for r in rows]

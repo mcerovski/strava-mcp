@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     mcp_host: str = "127.0.0.1"
     mcp_port: int = 8720
 
+    # --- Dashboard HTTP server (read-only UI; loopback only) ---
+    dashboard_host: str = "127.0.0.1"
+    dashboard_port: int = 8722
+
     # --- Sync tuning ---
     sync_max_requests: int = 900
 
