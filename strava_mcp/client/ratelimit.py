@@ -74,10 +74,15 @@ class RateLimitBudget:
         self.read_daily: Usage | None = None
         self.overall_15min: Usage | None = None
         self.overall_daily: Usage | None = None
+        # When the usage figures above were last observed. Used to treat them as
+        # stale once their window boundary has passed, so the worker resumes
+        # after a cooldown instead of re-cooling on pre-reset counts.
+        self._recorded_at: float | None = None
 
     # --- RateLimiter protocol ---------------------------------------------
     def record(self, headers: Mapping[str, str]) -> None:
         lower = {k.lower(): v for k, v in headers.items()}
+        self._recorded_at = self._clock()
         read_usage = _parse_pair(lower.get("x-readratelimit-usage"))
         read_limit = _parse_pair(lower.get("x-readratelimit-limit"))
         if read_usage and read_limit:
@@ -95,13 +100,39 @@ class RateLimitBudget:
             raise BudgetExhausted(tier)
 
     # --- budget logic ------------------------------------------------------
+    def _tier_stale(self, tier: str, now: float) -> bool:
+        """True if the recorded usage predates the tier's last window reset.
+
+        Strava's windows reset on fixed boundaries (quarter-hour / midnight UTC),
+        so once the clock crosses the boundary that followed our last reading,
+        that reading no longer reflects the current window and must not block.
+        """
+        if self._recorded_at is None:
+            return False
+        if tier == "daily":
+            return next_midnight_utc(self._recorded_at) <= now
+        return next_quarter_hour(self._recorded_at) <= now
+
     def exhausted_tier(self) -> str | None:
         """Return the exhausted tier (``'15min'``/``'daily'``) or None."""
-        if self.read_15min and self.read_15min.exhausted():
+        now = self._clock()
+        if (
+            self.read_15min
+            and self.read_15min.exhausted()
+            and not self._tier_stale("15min", now)
+        ):
             return "15min"
-        if self.read_daily and self.read_daily.exhausted(cap=self.max_requests):
+        if (
+            self.read_daily
+            and self.read_daily.exhausted(cap=self.max_requests)
+            and not self._tier_stale("daily", now)
+        ):
             return "daily"
-        if self.overall_15min and self.overall_15min.exhausted():
+        if (
+            self.overall_15min
+            and self.overall_15min.exhausted()
+            and not self._tier_stale("15min", now)
+        ):
             return "15min"
         return None
 

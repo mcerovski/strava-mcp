@@ -55,6 +55,31 @@ def test_before_request_raises_when_exhausted() -> None:
         raise AssertionError("expected BudgetExhausted")
 
 
+def test_exhaustion_clears_after_window_rolls_over() -> None:
+    # Regression: after a cooldown the worker must resume, not re-cool on the
+    # pre-reset usage counts.
+    now = {"t": float(_epoch(2026, 6, 5, 7, 29, 45))}
+    budget = RateLimitBudget(clock=lambda: now["t"])
+    budget.record({"X-ReadRateLimit-Usage": "100,200", "X-ReadRateLimit-Limit": "100,1000"})
+    assert budget.exhausted_tier() == "15min"  # genuinely exhausted in this window
+
+    # Advance the clock past the next quarter-hour boundary (07:30:00).
+    now["t"] = float(_epoch(2026, 6, 5, 7, 30, 1))
+    # The stale 100/100 reading no longer blocks — the window has reset.
+    assert budget.exhausted_tier() is None
+    budget.before_request()  # must not raise
+
+
+def test_daily_exhaustion_clears_after_midnight() -> None:
+    now = {"t": float(_epoch(2026, 6, 5, 23, 0))}
+    budget = RateLimitBudget(max_requests=900, clock=lambda: now["t"])
+    budget.record({"X-ReadRateLimit-Usage": "10,900", "X-ReadRateLimit-Limit": "100,1000"})
+    assert budget.exhausted_tier() == "daily"
+
+    now["t"] = float(_epoch(2026, 6, 6, 0, 0, 5))  # past midnight UTC
+    assert budget.exhausted_tier() is None
+
+
 def test_next_quarter_hour_boundaries() -> None:
     assert next_quarter_hour(_epoch(2021, 6, 1, 12, 7)) == _epoch(2021, 6, 1, 12, 15)
     assert next_quarter_hour(_epoch(2021, 6, 1, 12, 50)) == _epoch(2021, 6, 1, 13, 0)
