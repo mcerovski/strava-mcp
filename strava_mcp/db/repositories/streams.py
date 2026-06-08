@@ -61,6 +61,10 @@ class StreamsRepository(BaseRepository):
             "types": list(data.keys()),
         }
 
+    def count(self) -> int:
+        """Number of activities that carry a streams row."""
+        return int(self.conn.execute("SELECT COUNT(*) FROM activity_streams").fetchone()[0])
+
     def has_streams(self, activity_id: int) -> bool:
         return (
             self.conn.execute(

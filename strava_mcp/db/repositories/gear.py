@@ -41,3 +41,6 @@ class GearRepository(BaseRepository):
     def get(self, gear_id: str) -> dict[str, Any] | None:
         row = self.conn.execute("SELECT detail_json FROM gear WHERE id = ?", (gear_id,)).fetchone()
         return None if row is None else json.loads(row["detail_json"])
+
+    def count(self) -> int:
+        return int(self.conn.execute("SELECT COUNT(*) FROM gear").fetchone()[0])

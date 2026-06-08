@@ -202,6 +202,15 @@ class ActivitiesRepository(BaseRepository):
             ).fetchone()[0]
         )
 
+    def distinct_sport_types(self) -> list[str]:
+        """Distinct sport types across enriched activities (for the filter control)."""
+        rows = self.conn.execute(
+            "SELECT DISTINCT sport_type FROM activities "
+            "WHERE enriched_at IS NOT NULL AND sport_type IS NOT NULL "
+            "ORDER BY sport_type"
+        ).fetchall()
+        return [r["sport_type"] for r in rows]
+
     # SQL expression yielding each row's bucket start date, per grouping period.
     _ROLLUP_EXPR = {
         "monthly": "strftime('%Y-%m-01', start_date)",

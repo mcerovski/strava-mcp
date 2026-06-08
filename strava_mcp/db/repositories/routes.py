@@ -44,3 +44,6 @@ class RoutesRepository(BaseRepository):
             "SELECT detail_json FROM routes WHERE id = ?", (route_id,)
         ).fetchone()
         return None if row is None else json.loads(row["detail_json"])
+
+    def count(self) -> int:
+        return int(self.conn.execute("SELECT COUNT(*) FROM routes").fetchone()[0])
