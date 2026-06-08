@@ -3,7 +3,7 @@
 > A locally-run Python MCP server that gives AI agents read access to your full
 > Strava history, backed by a local SQLite database that mirrors the Strava API.
 
-Status: **draft / pre-implementation** · Runtime: Python 3.11+ managed by [`uv`](https://docs.astral.sh/uv/) · API: [Strava API v3](./API.md)
+Status: **draft / pre-implementation** · Runtime: Python 3.11+ managed by [`uv`](https://docs.astral.sh/uv/) · API: [Strava API v3](https://developers.strava.com/docs/reference/) (OpenAPI vendored under [`strava-api-spec/`](./strava-api-spec/))
 
 ---
 

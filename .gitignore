@@ -4,6 +4,10 @@
 # Local database (never commit synced Strava data)
 .database/
 
+# Spec Kit / AI dev tooling — kept local, not versioned (CLAUDE.md stays tracked)
+.specify/
+.claude/
+
 # Python / uv
 .venv/
 __pycache__/
