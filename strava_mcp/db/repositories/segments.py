@@ -81,6 +81,11 @@ class SegmentsRepository(BaseRepository):
         ).fetchone()
         return None if row is None else json.loads(row["detail_json"])
 
+    def count_starred(self) -> int:
+        return int(
+            self.conn.execute("SELECT COUNT(*) FROM segments WHERE starred = 1").fetchone()[0]
+        )
+
     def efforts_for_segment(self, segment_id: int) -> list[dict[str, Any]]:
         rows = self.conn.execute(
             "SELECT detail_json FROM segment_efforts WHERE segment_id = ? "

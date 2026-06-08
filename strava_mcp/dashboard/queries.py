@@ -17,8 +17,11 @@ from typing import Any
 
 from strava_mcp.db.repositories.activities import ActivitiesRepository
 from strava_mcp.db.repositories.athlete import AthleteRepository
+from strava_mcp.db.repositories.gear import GearRepository
+from strava_mcp.db.repositories.routes import RoutesRepository
 from strava_mcp.db.repositories.segments import SegmentsRepository
 from strava_mcp.db.repositories.streams import StreamsRepository
+from strava_mcp.db.repositories.sync_state import SyncStateRepository
 
 PAGE_SIZE = 50
 
@@ -80,12 +83,7 @@ def list_activities_page(
 def sport_types(db_path: Path | str) -> list[str]:
     """Distinct sport types across enriched activities (for the filter control)."""
     with reader(db_path) as conn:
-        rows = conn.execute(
-            "SELECT DISTINCT sport_type FROM activities "
-            "WHERE enriched_at IS NOT NULL AND sport_type IS NOT NULL "
-            "ORDER BY sport_type"
-        ).fetchall()
-    return [r["sport_type"] for r in rows]
+        return ActivitiesRepository(conn).distinct_sport_types()
 
 
 # --- activity detail (US2) -------------------------------------------------
@@ -165,13 +163,6 @@ def _iso(epoch: int | None) -> str | None:
     return datetime.fromtimestamp(epoch, tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _count(conn: sqlite3.Connection, table: str, where: str = "") -> int:
-    sql = f"SELECT COUNT(*) FROM {table}"
-    if where:
-        sql += f" WHERE {where}"
-    return int(conn.execute(sql).fetchone()[0])
-
-
 def sync_progress(db_path: Path | str) -> dict[str, Any]:
     """Current persisted sync state + counts (computed like the sync_status tool).
 
@@ -179,16 +170,14 @@ def sync_progress(db_path: Path | str) -> dict[str, Any]:
     persisted state if the worker is not running.
     """
     with reader(db_path) as conn:
-        row = conn.execute("SELECT * FROM sync_state WHERE id = 1").fetchone()
-        state: dict[str, Any] = (
-            dict(row) if row is not None else {"phase": "BOOTSTRAP", "backfill_complete": 0}
-        )
-        activities = _count(conn, "activities")
-        enriched = _count(conn, "activities", "enriched_at IS NOT NULL")
-        streams = _count(conn, "activity_streams")
-        gear = _count(conn, "gear")
-        routes = _count(conn, "routes")
-        starred = _count(conn, "segments", "starred = 1")
+        state = SyncStateRepository(conn).snapshot()
+        acts = ActivitiesRepository(conn)
+        activities = acts.count()
+        enriched = acts.count_enriched()
+        streams = StreamsRepository(conn).count()
+        gear = GearRepository(conn).count()
+        routes = RoutesRepository(conn).count()
+        starred = SegmentsRepository(conn).count_starred()
 
     backfill_complete = bool(state.get("backfill_complete"))
     fully_synced = backfill_complete and streams >= activities
