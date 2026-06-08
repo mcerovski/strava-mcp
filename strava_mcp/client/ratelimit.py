@@ -116,11 +116,7 @@ class RateLimitBudget:
     def exhausted_tier(self) -> str | None:
         """Return the exhausted tier (``'15min'``/``'daily'``) or None."""
         now = self._clock()
-        if (
-            self.read_15min
-            and self.read_15min.exhausted()
-            and not self._tier_stale("15min", now)
-        ):
+        if self.read_15min and self.read_15min.exhausted() and not self._tier_stale("15min", now):
             return "15min"
         if (
             self.read_daily
