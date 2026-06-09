@@ -27,8 +27,6 @@ _ACTIVITIES: list[dict[str, Any]] = [
         "moving_time": 3000,
         "elapsed_time": 3100,
         "total_elevation_gain": 100.0,
-        "kudos_count": i,
-        "comment_count": 0,
         "athlete": {"id": 12345},
     }
     for i in range(6)

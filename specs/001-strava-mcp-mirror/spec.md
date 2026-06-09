@@ -1,5 +1,12 @@
 # Feature Specification: Strava MCP Local Mirror
 
+> **Note (superseded in part by feature 003-remove-comments-kudos):** comments and
+> kudos were later removed from the product. References below to comments/kudos
+> enrichment, the `comments`/`kudos` tables, the `kudos_count`/`comment_count`
+> columns, and the `get_comments`/`get_kudos` tools no longer reflect the current
+> system. The current enrichment unit is detail + laps + zones + streams. This
+> historical spec is otherwise unchanged.
+
 **Feature Branch**: `001-strava-mcp-mirror`
 
 **Created**: 2026-06-04

@@ -31,7 +31,7 @@ _Avoid_: "done", "up to date" (ambiguous with poll).
 
 **Enrichment**:
 The complete per-activity data set fetched as one unit when the frontier reaches an activity:
-DetailedActivity + laps + comments + kudos + zones + streams. An activity is written only when
+DetailedActivity + laps + zones + streams. An activity is written only when
 fully enriched — partially-enriched activities are never visible.
 _Avoid_: details, hydration.
 
@@ -72,4 +72,4 @@ _Avoid_: cache, blob store.
 > **Domain:** That's the **poll's** job, not the backfill's — but only once we're **fully synced**.
 > During backfill the frontier is moving *backwards*, so today's ride is picked up by the very
 > first backfill page anyway (newest-first). Either way it arrives **enriched** — summary,
-> laps, kudos, zones, and **streams** together, never half.
+> laps, zones, and **streams** together, never half.

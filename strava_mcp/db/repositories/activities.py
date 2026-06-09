@@ -3,7 +3,7 @@
 Promoted columns (indexed) back the tool filters; everything else lives in
 ``detail_json`` (ADR 0002). Reads are **visibility-aware**: only rows with
 ``enriched_at IS NOT NULL`` are returned (R8, Constitution III). Enrichment
-writers (laps/comments/kudos/zones/efforts) are added in US4 (T038).
+writers cover laps/zones/efforts/streams.
 """
 
 from __future__ import annotations
@@ -34,8 +34,6 @@ _PROMOTED_KEYS = (
     "average_watts",
     "max_watts",
     "average_speed",
-    "kudos_count",
-    "comment_count",
     "gear_id",
 )
 
@@ -280,8 +278,6 @@ class ActivitiesRepository(BaseRepository):
             "average_heartrate": row["average_heartrate"],
             "average_watts": row["average_watts"],
             "average_speed": row["average_speed"],
-            "kudos_count": row["kudos_count"],
-            "comment_count": row["comment_count"],
             "gear_id": row["gear_id"],
         }
 
@@ -291,8 +287,6 @@ class ActivitiesRepository(BaseRepository):
         *,
         detail: dict[str, Any],
         laps: list[dict[str, Any]] | None,
-        comments: list[dict[str, Any]] | None,
-        kudos: list[dict[str, Any]] | None,
         zones: list[dict[str, Any]] | None,
         streams: dict[str, Any] | None,
     ) -> None:
@@ -330,8 +324,6 @@ class ActivitiesRepository(BaseRepository):
                 },
             )
             self._write_laps(activity_id, laps or [])
-            self._write_comments(activity_id, comments or [])
-            self._write_kudos(activity_id, kudos or [])
             self._write_zones(activity_id, zones or [])
             self._write_efforts(activity_id, detail)
             StreamsRepository(self.conn).write(activity_id, streams)
@@ -360,44 +352,6 @@ class ActivitiesRepository(BaseRepository):
                     "lap_index": lap.get("lap_index"),
                     "detail_json": json.dumps(lap, separators=(",", ":")),
                 },
-            )
-
-    def _write_comments(self, activity_id: int, comments: list[dict[str, Any]]) -> None:
-        record_raw(
-            self.conn,
-            resource_type="comments",
-            resource_id=activity_id,
-            endpoint=f"/activities/{activity_id}/comments",
-            payload=comments,
-        )
-        self.conn.execute("DELETE FROM comments WHERE activity_id = ?", (activity_id,))
-        for comment in comments:
-            upsert(
-                self.conn,
-                "comments",
-                {
-                    "id": int(comment["id"]),
-                    "activity_id": activity_id,
-                    "created_at": comment.get("created_at"),
-                    "detail_json": json.dumps(comment, separators=(",", ":")),
-                },
-            )
-
-    def _write_kudos(self, activity_id: int, kudoers: list[dict[str, Any]]) -> None:
-        record_raw(
-            self.conn,
-            resource_type="kudos",
-            resource_id=activity_id,
-            endpoint=f"/activities/{activity_id}/kudos",
-            payload=kudoers,
-        )
-        # Kudos have no stable id; re-derive the set on each enrichment.
-        self.conn.execute("DELETE FROM kudos WHERE activity_id = ?", (activity_id,))
-        for kudoer in kudoers:
-            name = " ".join(p for p in (kudoer.get("firstname"), kudoer.get("lastname")) if p)
-            self.conn.execute(
-                "INSERT INTO kudos (activity_id, athlete_name, detail_json) VALUES (?, ?, ?)",
-                (activity_id, name, json.dumps(kudoer, separators=(",", ":"))),
             )
 
     def _write_zones(self, activity_id: int, zones: list[dict[str, Any]]) -> None:
@@ -461,12 +415,6 @@ class ActivitiesRepository(BaseRepository):
 
     def laps(self, activity_id: int) -> list[dict[str, Any]]:
         return self._facet("laps", activity_id)
-
-    def comments(self, activity_id: int) -> list[dict[str, Any]]:
-        return self._facet("comments", activity_id)
-
-    def kudos(self, activity_id: int) -> list[dict[str, Any]]:
-        return self._facet("kudos", activity_id)
 
     def zones(self, activity_id: int) -> list[dict[str, Any]]:
         return self._facet("activity_zones", activity_id)

@@ -27,7 +27,7 @@ def test_streamless_enrichment_cannot_stamp(conn: sqlite3.Connection) -> None:
     repo = ActivitiesRepository(conn)
     repo.insert_summary({"id": 1, "start_date": "2021-01-01T00:00:00Z"})
     with pytest.raises(ValueError):
-        repo.enrich(detail={"id": 1}, laps=[], comments=[], kudos=[], zones=[], streams=None)
+        repo.enrich(detail={"id": 1}, laps=[], zones=[], streams=None)
     assert _all_enriched_have_streams(conn)  # no orphan stamped
 
 
@@ -37,8 +37,6 @@ def test_enriched_activity_always_has_streams_row(conn: sqlite3.Connection) -> N
     repo.enrich(
         detail={"id": 2},
         laps=[],
-        comments=[],
-        kudos=[],
         zones=[],
         streams={"time": {"data": [0, 1]}},
     )

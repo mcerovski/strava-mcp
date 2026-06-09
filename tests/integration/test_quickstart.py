@@ -16,8 +16,6 @@ from strava_mcp.db.repositories.activities import parse_epoch
 from strava_mcp.mcp.tools.activities import (
     get_activity,
     get_activity_zones,
-    get_comments,
-    get_kudos,
     get_laps,
     list_activities,
 )
@@ -83,7 +81,7 @@ def _handler(path: str, params: dict[str, Any]) -> Any:
         return load("activity_detail")
     if suffix == "/streams":
         return load("streams")
-    if suffix in ("/laps", "/comments", "/kudos", "/zones"):
+    if suffix in ("/laps", "/zones"):
         return load(suffix.strip("/"))
     raise AssertionError(path)
 
@@ -107,8 +105,6 @@ def test_quickstart_end_to_end(conn: sqlite3.Connection, db_path: Path) -> None:
     # Scenario 4 — enrichment facets.
     assert get_activity(db_path, 900003)["id"] == 900003
     assert len(get_laps(db_path, 900003)) == 2
-    assert len(get_comments(db_path, 900003)) == 2
-    assert len(get_kudos(db_path, 900003)) == 3
     assert len(get_activity_zones(db_path, 900003)) == 2
 
     # Scenario 5 — streams + fully synced.

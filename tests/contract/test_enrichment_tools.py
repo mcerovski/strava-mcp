@@ -9,8 +9,6 @@ from strava_mcp.db.repositories.activities import ActivitiesRepository
 from strava_mcp.mcp.tools.activities import (
     get_activity,
     get_activity_zones,
-    get_comments,
-    get_kudos,
     get_laps,
 )
 from strava_mcp.sync.resources.activities import ActivitiesSyncer
@@ -24,8 +22,6 @@ def _handler(path: str, params: dict[str, object]) -> object:
     return {
         "": load("activity_detail"),
         "/laps": load("laps"),
-        "/comments": load("comments"),
-        "/kudos": load("kudos"),
         "/zones": load("zones"),
         "/streams": load("streams"),
     }[suffix]
@@ -48,8 +44,6 @@ def test_full_get_activity(conn: sqlite3.Connection, db_path: Path) -> None:
 def test_facet_tools_return_collections(conn: sqlite3.Connection, db_path: Path) -> None:
     _enriched(conn)
     assert len(get_laps(db_path, 900003)) == 2
-    assert len(get_comments(db_path, 900003)) == 2
-    assert len(get_kudos(db_path, 900003)) == 3
     zones = get_activity_zones(db_path, 900003)
     assert {z["type"] for z in zones} == {"heartrate", "power"}
 
@@ -61,4 +55,26 @@ def test_facet_tools_not_yet_synced_when_pending(conn: sqlite3.Connection, db_pa
 
 
 def test_facet_tools_not_found_when_absent(db_path: Path, conn: sqlite3.Connection) -> None:
-    assert get_comments(db_path, 12321) == {"status": "not_found", "id": 12321}
+    assert get_laps(db_path, 12321) == {"status": "not_found", "id": 12321}
+
+
+def test_removed_comments_kudos_tools_are_unknown_operations(db_path: Path) -> None:
+    """FR-014: the removed capabilities are unknown operations, never empty/fabricated."""
+    import asyncio
+
+    import pytest
+    from fastmcp.exceptions import NotFoundError
+    from strava_mcp.mcp import server
+
+    app = server.build_app(db_path)
+
+    async def _run() -> None:
+        tools = await app.list_tools()
+        names = {t.name for t in tools}
+        assert "get_comments" not in names and "get_kudos" not in names
+        for removed in ("get_comments", "get_kudos"):
+            # FastMCP raises NotFoundError for an unknown tool.
+            with pytest.raises(NotFoundError):
+                await app.call_tool(removed, {"id": 900003})
+
+    asyncio.run(_run())

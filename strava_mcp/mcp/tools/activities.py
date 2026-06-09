@@ -73,16 +73,6 @@ def get_laps(db_path: Path | str, activity_id: int) -> Any:
     return _facet(db_path, activity_id, "laps")
 
 
-def get_comments(db_path: Path | str, activity_id: int) -> Any:
-    """The activity's comments, or ``not_yet_synced``/``not_found``."""
-    return _facet(db_path, activity_id, "comments")
-
-
-def get_kudos(db_path: Path | str, activity_id: int) -> Any:
-    """The activity's kudos, or ``not_yet_synced``/``not_found``."""
-    return _facet(db_path, activity_id, "kudos")
-
-
 def get_activity_zones(db_path: Path | str, activity_id: int) -> Any:
     """The activity's heart-rate/power zones, or ``not_yet_synced``/``not_found``."""
     return _facet(db_path, activity_id, "zones")

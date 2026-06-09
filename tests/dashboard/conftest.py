@@ -49,8 +49,6 @@ def enrich(
     ActivitiesRepository(conn).enrich(
         detail=detail,
         laps=laps or [],
-        comments=[],
-        kudos=[],
         zones=zones or [],
         streams=streams or {"time": {"data": [0, 1, 2]}, "heartrate": {"data": [120, 130, 140]}},
     )

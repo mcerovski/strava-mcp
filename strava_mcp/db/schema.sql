@@ -62,8 +62,6 @@ CREATE TABLE IF NOT EXISTS activities (
   average_watts         REAL,
   max_watts             REAL,
   average_speed         REAL,
-  kudos_count           INTEGER,
-  comment_count         INTEGER,
   gear_id               TEXT,
   trainer               INTEGER,
   commute               INTEGER,
@@ -96,28 +94,6 @@ CREATE TABLE IF NOT EXISTS laps (
   detail_json   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_laps_activity ON laps(activity_id);
-
--- ---------------------------------------------------------------------------
--- comments
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS comments (
-  id            INTEGER PRIMARY KEY,
-  activity_id   INTEGER REFERENCES activities(id),
-  created_at    TEXT,
-  detail_json   TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_comments_activity ON comments(activity_id);
-
--- ---------------------------------------------------------------------------
--- kudos (no stable id; synthesize)
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS kudos (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  activity_id   INTEGER REFERENCES activities(id),
-  athlete_name  TEXT,
-  detail_json   TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_kudos_activity ON kudos(activity_id);
 
 -- ---------------------------------------------------------------------------
 -- activity_zones

@@ -104,16 +104,6 @@ def register_tools(mcp, db_path: Path | str, poll_event=None) -> None:  # type: 
         return activity_tools.get_laps(db_path, id)
 
     @mcp.tool
-    def get_comments(id: int) -> object:
-        """Return the comments for one enriched activity."""
-        return activity_tools.get_comments(db_path, id)
-
-    @mcp.tool
-    def get_kudos(id: int) -> object:
-        """Return the kudos for one enriched activity."""
-        return activity_tools.get_kudos(db_path, id)
-
-    @mcp.tool
     def get_activity_zones(id: int) -> object:
         """Return the heart-rate/power zones for one enriched activity."""
         return activity_tools.get_activity_zones(db_path, id)

@@ -1,5 +1,10 @@
 # Phase 1 Data Model: Strava MCP Local Mirror
 
+> **Note (superseded in part by feature 003-remove-comments-kudos):** the
+> `comments` and `kudos` tables and the `kudos_count`/`comment_count` columns on
+> `activities` were removed. The live schema is `strava_mcp/db/schema.sql`; this
+> historical data model is otherwise unchanged.
+
 SQLite schema realizing the entities in [spec.md](./spec.md) under the design decisions in
 [research.md](./research.md) and ADRs 0001–0003. **Pattern (ADR 0002):** every normalized
 table carries keys + lean **promoted columns** (indexed, the only fields agents filter/sort/
