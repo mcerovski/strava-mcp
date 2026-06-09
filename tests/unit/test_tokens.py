@@ -28,19 +28,26 @@ def test_save_and_read_roundtrip(conn: sqlite3.Connection) -> None:
     assert got == tokens
 
 
-def test_db_overrides_env_seed(conn: sqlite3.Connection) -> None:
-    settings = _settings(
-        strava_access_token="env-acc",
-        strava_refresh_token="env-ref",
-        strava_token_expires_at=2_000_000_000,
-        strava_token_scope="read",
-    )
-    store = TokenStore(conn, settings)
-    # With no DB row, the env seed is used.
-    assert store.current().access_token == "env-acc"
-    # Once a DB row exists, it wins over the env seed.
+def test_current_resolves_db_row_only(conn: sqlite3.Connection) -> None:
+    store = TokenStore(conn, _settings())
+    # The DB row is the single source of truth for the active token set.
     store.save(TokenSet("db-acc", "db-ref", 2_000_000_000, "read"))
     assert store.current().access_token == "db-acc"
+
+
+def test_env_token_values_do_not_seed(conn: sqlite3.Connection) -> None:
+    # Legacy STRAVA_*_TOKEN* env keys are no longer a credential source: with no
+    # DB row they must NOT authorize anything — current() raises (no env seed).
+    settings = Settings(
+        strava_client_id="cid",
+        strava_client_secret="csecret",
+        STRAVA_ACCESS_TOKEN="env-acc",  # ignored (extra=ignore); no such field
+        STRAVA_REFRESH_TOKEN="env-ref",
+        _env_file=None,
+    )  # type: ignore[call-arg]
+    store = TokenStore(conn, settings)
+    with pytest.raises(RuntimeError, match="run `uv run strava-mcp auth`"):
+        store.current()
 
 
 def test_missing_tokens_raises(conn: sqlite3.Connection) -> None:

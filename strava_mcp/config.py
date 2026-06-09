@@ -39,12 +39,6 @@ class Settings(BaseSettings):
     strava_client_id: str = ""
     strava_client_secret: str = ""
 
-    # --- Optional bootstrap token seed (DB overrides once present) ---
-    strava_access_token: str = ""
-    strava_refresh_token: str = ""
-    strava_token_expires_at: int = 0
-    strava_token_scope: str = ""
-
     # --- OAuth flow ---
     strava_scopes: str = ",".join(REQUIRED_SCOPES)
     oauth_redirect_host: str = "127.0.0.1"

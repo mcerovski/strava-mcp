@@ -60,7 +60,9 @@ Key settings (see `.env.example` for all):
 | `SYNC_MAX_REQUESTS` | `900` | Per-window request ceiling the worker self-limits to. |
 
 Secrets live only under `.env` and `./.database/` (both gitignored) and are
-**never logged**.
+**never logged**. `.env` holds only the app **client credentials**
+(`STRAVA_CLIENT_ID` / `STRAVA_CLIENT_SECRET`); OAuth **tokens are obtained by
+`auth` and stored solely in the database** — never in `.env`.
 
 ## Authorize
 
