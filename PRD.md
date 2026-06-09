@@ -24,7 +24,7 @@ for the database.
 
 | Decision | Choice | Implication |
 |----------|--------|-------------|
-| Data fetch | **Eager — one unified backfill** | The background sweep fetches the *complete* mirror in a single newest→oldest pass: every activity plus all enrichment (detail, laps, comments, kudos, zones) **and all streams**. **No lazy/on-demand fetching** — the agent sees an activity only once the backfill has reached it. MCP tools are pure DB readers; only the background worker calls Strava. |
+| Data fetch | **Eager — one unified backfill** | The background sweep fetches the *complete* mirror in a single newest→oldest pass: every activity plus all enrichment (detail, laps, zones) **and all streams**. **No lazy/on-demand fetching** — the agent sees an activity only once the backfill has reached it. MCP tools are pure DB readers; only the background worker calls Strava. |
 | OAuth scope | **Full read incl. private** | Request `read_all`, `profile:read_all`, `activity:read_all` (+ `read`, `activity:read`). Captures private / Only-You activities, privacy-zone data, private routes & segments. No write scopes (read-only tool). |
 | Re-sync policy | **Insert-only + lookback** | POLL lists `after = newest_synced − 14 days` and **dedupes by activity id**, so back-dated uploads are caught. Existing rows are never re-fetched or mutated; edits/deletes on Strava are **not** reflected. |
 | Sync execution | **Server-owned background worker** | The `serve` process runs a self-throttling sweep: newest→oldest backfill until rate-limited, sleep & re-check (~hourly) until the window resets, resume, repeat until backfill complete. Then a 12-hour poll for new activities. Progress logged to terminal **and** a local log file. |
@@ -101,7 +101,7 @@ rest lives in a `detail_json` column. Each table has:
 2. **Promoted columns** (indexed) — the queryable fields only, e.g. for `activities`:
    `start_date`, `start_date_local`, `sport_type`, `name`, `distance`, `moving_time`,
    `elapsed_time`, `total_elevation_gain`, `average_heartrate`, `max_heartrate`,
-   `average_watts`, `max_watts`, `average_speed`, `kudos_count`, `comment_count`,
+   `average_watts`, `max_watts`, `average_speed`,
    `gear_id`, `trainer`, `commute`, `private`.
 3. **`detail_json`** — the full parsed object for everything else (nested `map`, `photos`,
    `splits_metric/standard`, etc.).
@@ -118,8 +118,6 @@ SQLite `json_extract` (unindexed); the promoted set can be widened cheaply later
 | `activities` | `GET /athlete/activities`, `GET /activities/{id}` | Summary fields on list; enriched with DetailedActivity on detail fetch. |
 | `activity_streams` | `GET /activities/{id}/streams` | Populated by the backfill as part of each activity's enrichment. Stores each stream type as JSON array + metadata (resolution, original_size). |
 | `laps` | `GET /activities/{id}/laps` | |
-| `comments` | `GET /activities/{id}/comments` | |
-| `kudos` | `GET /activities/{id}/kudos` | |
 | `activity_zones` | `GET /activities/{id}/zones` | HR/power distribution buckets. |
 | `gear` | `GET /gear/{id}` | IDs come from `athlete.bikes`/`shoes`. |
 | `routes` | `/athletes/{id}/routes`, `/routes/{id}` | **Metadata only** (includes polyline map). No GPX/TCX export. |
@@ -155,7 +153,7 @@ POLL        → every 12h: /athlete/activities?after=<newest_synced − 14 days>
 - Newest activities are synced **first** so the agent has useful recent data early,
   even while older history is still streaming in.
 - Each activity is **fully enriched in one pass** as the frontier reaches it:
-  DetailedActivity → laps → comments → kudos → zones → **streams**. An activity is
+  DetailedActivity → laps → zones → **streams**. An activity is
   written only as a complete unit, so what's in the DB is always fully synced.
 - **No lazy/on-demand fetching.** An activity is invisible to the agent until the
   backfill has reached and enriched it.
@@ -187,7 +185,7 @@ the frontier hasn't reached yet, tools simply return "not yet synced".
 - `list_activities(after?, before?, sport_type?, limit?)` — filtered activity summaries.
 - `get_activity(id)` — full DetailedActivity (laps, splits, best efforts, gear).
 - `get_activity_streams(id, keys?)` — returns the stored streams (or "not yet synced").
-- `get_activity_zones(id)` / `get_laps(id)` / `get_comments(id)` / `get_kudos(id)`.
+- `get_activity_zones(id)` / `get_laps(id)`.
 - `list_gear()` / `get_gear(id)`.
 - `list_routes()` / `get_route(id)`.
 - `list_starred_segments()` / `get_segment(id)` / `list_segment_efforts(segment_id)`.

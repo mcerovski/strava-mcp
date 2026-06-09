@@ -53,8 +53,6 @@ def test_registered_tool_set(db_path: Path) -> None:
         "list_activities",
         "get_activity",
         "get_laps",
-        "get_comments",
-        "get_kudos",
         "get_activity_zones",
         "get_activity_streams",
         "list_gear",
@@ -69,3 +67,6 @@ def test_registered_tool_set(db_path: Path) -> None:
         "sync_now",
     }
     assert expected <= names
+    # Comments/kudos tools were removed (feature 003); they must not be registered.
+    assert "get_comments" not in names
+    assert "get_kudos" not in names

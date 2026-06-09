@@ -18,7 +18,7 @@ uv run strava-mcp dashboard  # read-only local web UI over the mirror (loopback)
 ```
 
 - **Backfill**: a single worker thread pages your activities newest→oldest,
-  fetching each activity as one enriched unit (detail + laps + comments + kudos +
+  fetching each activity as one enriched unit (detail + laps +
   zones + streams + segment efforts) and writing it atomically. An activity
   becomes visible to agents only once it is **fully enriched** — partial data is
   never exposed.
@@ -114,7 +114,7 @@ tools:
 
 - `get_athlete()`
 - `list_activities(after?, before?, sport_type?, limit?)` · `get_activity(id)`
-- `get_laps(id)` · `get_comments(id)` · `get_kudos(id)` · `get_activity_zones(id)`
+- `get_laps(id)` · `get_activity_zones(id)`
 - `get_activity_streams(id, keys?)`
 - `list_gear()` · `get_gear(id)`
 - `list_routes()` · `get_route(id)`

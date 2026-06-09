@@ -11,7 +11,7 @@ Vocabulary follows [CONTEXT.md](./CONTEXT.md); rationale in [docs/adr/](./docs/a
 | 1 | Skeleton + `auth` (OAuth → token in DB) | **HITL** |
 | 2 | Athlete tracer bullet: `get_athlete` served from DB | AFK |
 | 3 | Activity backfill (summaries) + rate limiter + list/get + `sync_status` | AFK |
-| 4 | Per-activity enrichment: detail + laps + comments + kudos + zones | AFK |
+| 4 | Per-activity enrichment: detail + laps + zones (comments/kudos removed in 003) | AFK |
 | 5 | Streams end-to-end: `get_activity_streams` | AFK |
 | 6 | Gear, routes, starred segments + their tools | AFK |
 | 7 | Steady-state POLL + `sync_now` | AFK |
@@ -93,7 +93,12 @@ Slice 2.
 
 ---
 
-## Slice 4 — Per-activity enrichment: detail + laps + comments + kudos + zones · AFK
+## Slice 4 — Per-activity enrichment: detail + laps + zones · AFK
+
+> **Superseded by feature 003-remove-comments-kudos:** comments and kudos were
+> removed from enrichment, storage, and the tool surface. The current enrichment
+> unit is **detail + laps + zones + streams**; `get_comments`/`get_kudos` no
+> longer exist. The original slice text below is kept as a delivery record.
 
 ### What to build
 As the frontier reaches each activity, enrich it as one complete unit: `DetailedActivity`,

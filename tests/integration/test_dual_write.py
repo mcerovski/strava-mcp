@@ -49,7 +49,7 @@ def _handler(path: str, params: dict[str, Any]) -> Any:
         return load("activity_detail")
     if suffix == "/streams":
         return load("streams")
-    if suffix in ("/laps", "/comments", "/kudos", "/zones"):
+    if suffix in ("/laps", "/zones"):
         return load(suffix.strip("/"))
     raise AssertionError(path)
 
@@ -80,7 +80,7 @@ def test_every_normalized_row_has_a_backing_raw_row(conn: sqlite3.Connection) ->
     for (activity_id,) in conn.execute("SELECT id FROM activities WHERE enriched_at IS NOT NULL"):
         assert _raw_for(conn, "activity_detail", activity_id) >= 1
         assert _raw_for(conn, "streams", activity_id) >= 1
-        for facet in ("laps", "comments", "kudos", "zones"):
+        for facet in ("laps", "zones"):
             assert _raw_for(conn, facet, activity_id) >= 1
 
     # Derived rows are backed by the activity_detail raw payload.

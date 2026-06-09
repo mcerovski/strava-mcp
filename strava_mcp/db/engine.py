@@ -39,6 +39,11 @@ def connect(db_path: Path | str) -> sqlite3.Connection:
     conn = sqlite3.connect(str(path), check_same_thread=False, isolation_level=None)
     conn.row_factory = sqlite3.Row
     _apply_pragmas(conn)
+    # Bring a legacy database in line with the current schema before applying it
+    # (idempotent no-op on fresh/already-migrated databases).
+    from strava_mcp.db import migrations
+
+    migrations.migrate(conn)
     apply_schema(conn)
     return conn
 

@@ -21,10 +21,6 @@ def _enrich_handler(path: str, params: dict[str, object]) -> object:
         return load("activity_detail")
     if path == "/activities/900003/laps":
         return load("laps")
-    if path == "/activities/900003/comments":
-        return load("comments")
-    if path == "/activities/900003/kudos":
-        return load("kudos")
     if path == "/activities/900003/zones":
         return load("zones")
     if path == "/activities/900003/streams":
@@ -46,7 +42,19 @@ def test_enrichment_writes_all_facets_and_stamps_last(conn: sqlite3.Connection) 
     # Pre-enrichment: summary exists but invisible.
     assert repo.status(900003) == "pending"
 
-    ActivitiesSyncer(FakeStravaClient(_enrich_handler), repo).enrich(900003)
+    client = FakeStravaClient(_enrich_handler)
+    ActivitiesSyncer(client, repo).enrich(900003)
+
+    # FR-013: exactly four read requests per activity — detail, laps, zones,
+    # streams — and never comments or kudos.
+    paths = [p for p, _ in client.calls]
+    assert paths == [
+        "/activities/900003",
+        "/activities/900003/laps",
+        "/activities/900003/zones",
+        "/activities/900003/streams",
+    ]
+    assert not any("/comments" in p or "/kudos" in p for p in paths)
 
     # Visible only now, with all facets + streams present.
     assert repo.status(900003) == "enriched"
@@ -54,8 +62,6 @@ def test_enrichment_writes_all_facets_and_stamps_last(conn: sqlite3.Connection) 
         conn.execute("SELECT enriched_at FROM activities WHERE id=900003").fetchone()[0] is not None
     )
     assert conn.execute("SELECT COUNT(*) FROM laps WHERE activity_id=900003").fetchone()[0] == 2
-    assert conn.execute("SELECT COUNT(*) FROM comments WHERE activity_id=900003").fetchone()[0] == 2
-    assert conn.execute("SELECT COUNT(*) FROM kudos WHERE activity_id=900003").fetchone()[0] == 3
     assert (
         conn.execute("SELECT COUNT(*) FROM activity_zones WHERE activity_id=900003").fetchone()[0]
         == 2
@@ -78,7 +84,7 @@ def test_enrichment_without_streams_never_becomes_visible(conn: sqlite3.Connecti
     repo = ActivitiesRepository(conn)
     repo.insert_summary({"id": 5, "start_date": "2021-01-01T00:00:00Z"})
     with pytest.raises(ValueError):
-        repo.enrich(detail={"id": 5}, laps=[], comments=[], kudos=[], zones=[], streams=None)
+        repo.enrich(detail={"id": 5}, laps=[], zones=[], streams=None)
     # Still invisible; no enriched_at, no streams row.
     assert repo.status(5) == "pending"
     assert (
@@ -95,8 +101,6 @@ def test_enrichment_rolls_back_on_failure(conn: sqlite3.Connection) -> None:
         repo.enrich(
             detail={"id": 7},
             laps=[{"lap_index": 1}],  # missing "id"
-            comments=[],
-            kudos=[],
             zones=[],
             streams={"time": {"data": [0]}},
         )

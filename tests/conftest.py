@@ -113,9 +113,9 @@ def build_handler(
     """Build a handler serving paged summaries + per-activity enrichment.
 
     ``/athlete/activities`` is paged newest→oldest via ``before``. Enrichment
-    endpoints (``/activities/{id}``, ``/laps``, ``/comments``, ``/kudos``,
-    ``/zones``, ``/streams``) return the supplied data or sensible empties so the
-    enrichment unit always succeeds (streams default to a tiny non-empty set).
+    endpoints (``/activities/{id}``, ``/laps``, ``/zones``, ``/streams``) return
+    the supplied data or sensible empties so the enrichment unit always succeeds
+    (streams default to a tiny non-empty set).
     """
     details = details or {}
     facets = facets or {}

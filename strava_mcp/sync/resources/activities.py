@@ -2,7 +2,7 @@
 
 Backfill paging uses ``before=<frontier_epoch>`` so a restart resumes strictly
 older than the checkpoint with zero re-fetch (Constitution IV). The enrichment
-unit (detail + laps + comments + kudos + zones + streams + efforts, stamped
+unit (detail + laps + zones + streams + efforts, stamped
 ``enriched_at`` last) is added in US4 (T039).
 """
 
@@ -75,8 +75,6 @@ class ActivitiesSyncer:
         """
         detail = self.client.get(f"/activities/{activity_id}")
         laps = self._safe_list(f"/activities/{activity_id}/laps")
-        comments = self._safe_list(f"/activities/{activity_id}/comments")
-        kudos = self._safe_list(f"/activities/{activity_id}/kudos")
         zones = self._safe_list(f"/activities/{activity_id}/zones")
         streams = (
             self.client.get(
@@ -88,8 +86,6 @@ class ActivitiesSyncer:
         self.repo.enrich(
             detail=detail,
             laps=laps,
-            comments=comments,
-            kudos=kudos,
             zones=zones,
             streams=streams,
         )
