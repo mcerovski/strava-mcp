@@ -48,8 +48,7 @@ def _seed_legacy(path: Path) -> None:
         "INSERT INTO laps (id, activity_id, lap_index, detail_json) VALUES (10, 1, 0, '{}')"
     )
     conn.execute(
-        "INSERT INTO comments (id, activity_id, created_at, detail_json) "
-        "VALUES (100, 1, 't', '{}')"
+        "INSERT INTO comments (id, activity_id, created_at, detail_json) VALUES (100, 1, 't', '{}')"
     )
     conn.execute(
         "INSERT INTO kudos (activity_id, athlete_name, detail_json) VALUES (1, 'A B', '{}')"
@@ -81,9 +80,9 @@ def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
 def test_migration_drops_served_structures(tmp_path: Path) -> None:
     path = tmp_path / "legacy.db"
     _seed_legacy(path)
-    raw_before = sqlite3.connect(str(path)).execute(
-        "SELECT COUNT(*) FROM raw_responses"
-    ).fetchone()[0]
+    raw_before = (
+        sqlite3.connect(str(path)).execute("SELECT COUNT(*) FROM raw_responses").fetchone()[0]
+    )
 
     conn = engine.connect(path)
     try:
@@ -96,8 +95,7 @@ def test_migration_drops_served_structures(tmp_path: Path) -> None:
         assert conn.execute("SELECT COUNT(*) FROM laps").fetchone()[0] == 1
         # 4. visibility preserved.
         assert (
-            conn.execute("SELECT enriched_at FROM activities WHERE id=1").fetchone()[0]
-            == "stamp"
+            conn.execute("SELECT enriched_at FROM activities WHERE id=1").fetchone()[0] == "stamp"
         )
         # 5. raw archive preserved (including legacy comments/kudos rows).
         assert conn.execute("SELECT COUNT(*) FROM raw_responses").fetchone()[0] == raw_before
