@@ -66,7 +66,20 @@ def test_serve_accepts_full_scope_token(conn: sqlite3.Connection, db_path: Path)
 
 def test_serve_refuses_when_no_token(db_path: Path) -> None:
     settings = _settings(db_path)
-    # No tokens persisted, no env seed → all scopes reported missing.
+    # No tokens persisted → all scopes reported missing. There is no env seed:
+    # the DB row is the only source, so an empty store means "run auth".
+    assert len(server.check_scopes(settings)) == 5
+
+
+def test_env_token_values_cannot_satisfy_scope_gate(db_path: Path) -> None:
+    # Legacy STRAVA_*_TOKEN* env values must not seed the scope gate; with no DB
+    # row the gate still reports all required scopes missing.
+    settings = _settings(
+        db_path,
+        STRAVA_ACCESS_TOKEN="env-acc",
+        STRAVA_REFRESH_TOKEN="env-ref",
+        STRAVA_TOKEN_SCOPE="read,read_all,profile:read_all,activity:read,activity:read_all",
+    )
     assert len(server.check_scopes(settings)) == 5
 
 

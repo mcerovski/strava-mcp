@@ -1,9 +1,9 @@
 """Token storage (single DB row) + near-expiry auto-refresh (research R4).
 
-The ``tokens`` table is the source of record once present; the ``.env`` seed is
-used only to bootstrap before the first ``auth`` run. On each worker request the
-access token is refreshed when within the margin of expiry, persisting the
-(possibly rotated) refresh token.
+The ``tokens`` table is the single source of truth, populated only by the ``auth``
+flow. There is no environment seed: if no row exists, the operator must run ``auth``.
+On each worker request the access token is refreshed when within the margin of expiry,
+persisting the (possibly rotated) refresh token.
 """
 
 from __future__ import annotations
@@ -93,23 +93,13 @@ class TokenStore:
         )
         self.conn.commit()
 
-    def _seed_from_env(self) -> TokenSet | None:
-        s = self.settings
-        if s.strava_access_token and s.strava_refresh_token:
-            return TokenSet(
-                access_token=s.strava_access_token,
-                refresh_token=s.strava_refresh_token,
-                expires_at=int(s.strava_token_expires_at or 0),
-                scope=s.strava_token_scope or s.strava_scopes,
-            )
-        return None
-
     def current(self) -> TokenSet:
-        """The active token set: DB row if present, else the ``.env`` seed.
+        """The active token set: the persisted DB row, the single source of truth.
 
-        Raises if neither exists (the operator must run ``auth`` first).
+        Raises if no row exists (the operator must run ``auth`` first). There is no
+        environment seed — tokens enter the store only via the ``auth`` flow.
         """
-        tokens = self.read() or self._seed_from_env()
+        tokens = self.read()
         if tokens is None:
             raise RuntimeError("No tokens available; run `uv run strava-mcp auth`.")
         return tokens

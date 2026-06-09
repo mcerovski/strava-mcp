@@ -31,14 +31,15 @@ log = get_logger()
 
 
 def check_scopes(settings: Settings) -> list[str]:
-    """Return required scopes missing from the stored/seed token.
+    """Return required scopes missing from the stored token.
 
-    A non-empty list means ``serve`` must refuse to start. An absent token also
-    counts as "all scopes missing" — the operator must run ``auth`` first.
+    A non-empty list means ``serve`` must refuse to start. An absent token (the
+    single DB row) also counts as "all scopes missing" — the operator must run
+    ``auth`` first. The DB row is the only token source; there is no env seed.
     """
     conn = engine.connect(settings.strava_db_path)
     try:
-        tokens = TokenStore(conn, settings).read() or _seed_tokens(settings)
+        tokens = TokenStore(conn, settings).read()
         if tokens is None:
             from strava_mcp.config import REQUIRED_SCOPES
 
@@ -46,19 +47,6 @@ def check_scopes(settings: Settings) -> list[str]:
         return missing_scopes(tokens.scope)
     finally:
         conn.close()
-
-
-def _seed_tokens(settings: Settings):  # type: ignore[no-untyped-def]
-    if settings.strava_access_token and settings.strava_refresh_token:
-        from strava_mcp.auth.tokens import TokenSet
-
-        return TokenSet(
-            access_token=settings.strava_access_token,
-            refresh_token=settings.strava_refresh_token,
-            expires_at=int(settings.strava_token_expires_at or 0),
-            scope=settings.strava_token_scope or settings.strava_scopes,
-        )
-    return None
 
 
 def build_app(db_path: Path | str, poll_event=None):  # type: ignore[no-untyped-def]
