@@ -2,7 +2,8 @@
 
 Streams are downsampled to a bounded number of points before plotting so chart
 size and render time stay bounded regardless of activity length (spec SC-003,
-Constitution IV). Only stream types actually present produce a chart.
+Constitution IV). Only stream types that are present and carry a non-zero signal
+produce a chart; all-zero series (e.g. indoor altitude/grade) are suppressed.
 """
 
 from __future__ import annotations
@@ -124,6 +125,13 @@ def build_activity_charts(streams_payload: dict[str, Any] | None) -> list[str]:
         try:
             ys = [float(v) for v in ys_raw]
         except (TypeError, ValueError):
+            continue
+        # Strava returns altitude/grade_smooth (and sometimes speed) for every
+        # activity, filling them with zeros when the device had no barometer/GPS.
+        # An all-zero series carries no plottable signal regardless of sport, so
+        # suppress it rather than render a dead-flat line. Streams with any
+        # non-zero sample (incl. negatives, or zeros mixed with real values) stay.
+        if not any(ys):
             continue
         xs, x_label = _x_axis(streams, len(ys))
         charts.append(_chart_svg(label, unit, xs, ys, x_label))
