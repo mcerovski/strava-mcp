@@ -107,6 +107,62 @@ The UI is fully offline (no external assets), shows no GPS map in v1, and render
 no tokens or secrets. If the mirror does not exist yet it prints
 `run uv run strava-mcp serve` rather than failing opaquely.
 
+## Run as a service (systemd)
+
+To keep `serve` and the `dashboard` running on a VPS — restarting on crash and
+starting on boot — install them as **user** systemd services. Two units run the
+two commands independently from the project directory.
+
+Create `~/.config/systemd/user/strava-mcp.service`:
+
+```ini
+[Unit]
+Description=strava-mcp (MCP server + background sync worker)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/<user>/projects/strava-mcp
+ExecStart=/home/<user>/.local/bin/uv run strava-mcp serve
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+```
+
+And `~/.config/systemd/user/strava-mcp-dashboard.service` (identical, with
+`ExecStart=… uv run strava-mcp dashboard` and a matching `Description`).
+
+Enable and start them:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now strava-mcp.service strava-mcp-dashboard.service
+systemctl --user status strava-mcp.service strava-mcp-dashboard.service
+```
+
+**Boot persistence (important):** user services only run while you have an active
+login session unless **linger** is enabled. Without it the services stop on logout
+and do **not** start after a reboot:
+
+```bash
+sudo loginctl enable-linger <user>     # start at boot, survive logout
+loginctl show-user <user> -p Linger    # expect: Linger=yes
+```
+
+Useful operations:
+
+```bash
+journalctl --user -u strava-mcp -f                       # follow logs (also ./.database/strava-mcp.log)
+systemctl --user restart strava-mcp strava-mcp-dashboard  # after pulling new code
+```
+
+> Restarting `serve` after an upgrade applies any pending schema migration to the
+> mirror on first DB open (idempotent). Back up `.database/strava.db` before
+> upgrades that change the schema.
+
 ## Connecting an MCP client
 
 Point any MCP client at `http://127.0.0.1:8720` (streamable HTTP). Available read
