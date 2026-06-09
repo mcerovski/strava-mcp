@@ -77,6 +77,22 @@ def test_detail_no_streams_note(conn: sqlite3.Connection, db_path: Path) -> None
     assert "<polyline" not in html
 
 
+def test_detail_all_zero_streams_show_note(conn: sqlite3.Connection, db_path: Path) -> None:
+    # Streams are present but every plottable series is all-zero (indoor/no-GPS):
+    # all charts are suppressed, so the detail page falls back to the no-data note.
+    detail = make_activity(6, name="Indoor Session")
+    streams = {
+        "time": {"data": [0, 1, 2, 3]},
+        "altitude": {"data": [0, 0, 0, 0]},
+        "grade_smooth": {"data": [0, 0, 0, 0]},
+    }
+    enrich(conn, detail, streams=streams)
+    status, html = handlers.handle_detail(db_path, 6)
+    assert status == 200
+    assert "No stream data" in html
+    assert "<polyline" not in html
+
+
 def test_detail_missing_is_404(conn: sqlite3.Connection, db_path: Path) -> None:  # noqa: ARG001
     status, html = handlers.handle_detail(db_path, 999)
     assert status == 404
