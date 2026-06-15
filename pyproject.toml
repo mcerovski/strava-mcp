@@ -15,8 +15,8 @@ strava-mcp = "strava_mcp.__main__:main"
 
 [dependency-groups]
 dev = [
-    "pytest>=8.0",
-    "ruff>=0.6",
+    "pytest>=9.1.0",
+    "ruff>=0.15.17",
     "mypy>=1.10",
 ]
 
