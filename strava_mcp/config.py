@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     # --- Local database ---
     strava_db_path: str = "./.database/strava.db"
 
+    # --- Logging ---
+    strava_log_path: str = "./.logs/strava-mcp.log"
+
     # --- MCP HTTP server ---
     mcp_host: str = "127.0.0.1"
     mcp_port: int = 8720

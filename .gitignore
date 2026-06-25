@@ -4,6 +4,9 @@
 # Local database (never commit synced Strava data)
 .database/
 
+# Application logs
+.logs/
+
 # Spec Kit / AI dev tooling — kept local, not versioned (CLAUDE.md stays tracked)
 .specify/
 .claude/

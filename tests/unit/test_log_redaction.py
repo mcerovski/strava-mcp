@@ -31,8 +31,8 @@ def test_scrub_removes_bearer_and_token_fields() -> None:
 
 
 def test_no_secret_reaches_stdout_or_file(tmp_path: Path, capsys) -> None:  # type: ignore[no-untyped-def]
-    db_path = tmp_path / "strava.db"
-    logger = setup_logging(db_path, level=logging.INFO)
+    log_path = tmp_path / "strava-mcp.log"
+    logger = setup_logging(log_path, level=logging.INFO)
     secret = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"  # 32-hex, token-like
     logger.info("refreshing with Bearer %s", secret)
     logger.info('persisted {"access_token": "topsecretvalue"}')
@@ -40,8 +40,7 @@ def test_no_secret_reaches_stdout_or_file(tmp_path: Path, capsys) -> None:  # ty
     for handler in logger.handlers:
         handler.flush()
 
-    log_file = db_path.parent / "strava-mcp.log"
-    file_text = log_file.read_text(encoding="utf-8")
+    file_text = log_path.read_text(encoding="utf-8")
     captured = capsys.readouterr()
 
     assert secret not in file_text
@@ -51,9 +50,9 @@ def test_no_secret_reaches_stdout_or_file(tmp_path: Path, capsys) -> None:  # ty
 
 
 def test_setup_logging_is_idempotent(tmp_path: Path) -> None:
-    db_path = tmp_path / "strava.db"
-    a = setup_logging(db_path)
+    log_path = tmp_path / "strava-mcp.log"
+    a = setup_logging(log_path)
     handler_count = len(a.handlers)
-    b = setup_logging(db_path)
+    b = setup_logging(log_path)
     assert a is b
     assert len(b.handlers) == handler_count  # no duplicate handlers

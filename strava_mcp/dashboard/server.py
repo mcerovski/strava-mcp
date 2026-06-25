@@ -106,7 +106,7 @@ def _verify_db(db_path: Path | str) -> bool:
 def run_dashboard(settings: Settings | None = None) -> int:
     """Entry point for ``strava-mcp dashboard``."""
     settings = settings or get_settings()
-    setup_logging(settings.strava_db_path)
+    setup_logging(settings.strava_log_path)
 
     if not _verify_db(settings.strava_db_path):
         print(

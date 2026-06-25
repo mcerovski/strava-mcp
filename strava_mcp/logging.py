@@ -11,8 +11,6 @@ import re
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-_LOG_FILENAME = "strava-mcp.log"
-
 # Patterns that look like secrets in messages/args. Conservative but effective:
 # bearer headers, oauth token JSON fields, and long hex/secret-ish blobs.
 _REDACTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
@@ -54,10 +52,10 @@ class RedactionFilter(logging.Filter):
         return _scrub(value) if isinstance(value, str) else value
 
 
-def setup_logging(db_path: Path | str, *, level: int = logging.INFO) -> logging.Logger:
+def setup_logging(log_path: Path | str, *, level: int = logging.INFO) -> logging.Logger:
     """Configure the ``strava_mcp`` logger with stdout + rotating-file sinks.
 
-    The log file lives next to the database (``./.database/strava-mcp.log``).
+    The log file is written to ``log_path`` (``./.logs/strava-mcp.log`` by default).
     Idempotent: repeated calls do not stack handlers.
     """
     logger = logging.getLogger("strava_mcp")
@@ -66,9 +64,8 @@ def setup_logging(db_path: Path | str, *, level: int = logging.INFO) -> logging.
     if logger.handlers:
         return logger
 
-    log_dir = Path(db_path).parent
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / _LOG_FILENAME
+    log_file = Path(log_path)
+    log_file.parent.mkdir(parents=True, exist_ok=True)
 
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
     redaction = RedactionFilter()

@@ -171,7 +171,7 @@ def _prewarm_http_stack() -> None:
 def run_server(settings: Settings | None = None) -> int:
     """Entry point for ``strava-mcp serve``."""
     settings = settings or get_settings()
-    setup_logging(settings.strava_db_path)
+    setup_logging(settings.strava_log_path)
 
     absent = check_scopes(settings)
     if absent:
