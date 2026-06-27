@@ -7,12 +7,17 @@ and ``rate_limiter`` injection points; this module owns request mechanics only.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from typing import Any, Protocol
 
 import httpx
 
+from strava_mcp import audit
 from strava_mcp.config import STRAVA_API_BASE
+from strava_mcp.logging import get_logger
+
+log = get_logger(__name__)
 
 
 class StravaError(Exception):
@@ -81,16 +86,75 @@ class StravaClient:
     def __exit__(self, *exc: object) -> None:
         self.close()
 
+    def _rate_limit_snapshot(self) -> dict[str, Any] | None:
+        snap = getattr(self._rate_limiter, "snapshot", None)
+        return snap() if callable(snap) else None
+
     def _request(self, method: str, path: str, *, params: dict[str, Any] | None = None) -> Any:
         if self._rate_limiter is not None:
             self._rate_limiter.before_request()
         url = path if path.startswith("http") else f"{self._base_url}/{path.lstrip('/')}"
         headers = {"Authorization": f"Bearer {self._token_provider()}"}
-        response = self._client.request(method, url, params=params, headers=headers)
+        # Never log headers or the bearer token (Constitution security clause).
+        log.debug("%s %s params=%s", method, path, params)
+        req_id = audit.current_req_id()
+        query = audit.summarize_args(params) if params else None
+        audit.emit("strava", "request", req_id=req_id, method=method, path=path, query=query)
+        start = time.monotonic()
+        try:
+            response = self._client.request(method, url, params=params, headers=headers)
+        except Exception as exc:
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            log.error("%s %s -> transport error (%dms): %s", method, path, elapsed_ms, exc)
+            audit.emit(
+                "strava",
+                "response",
+                req_id=req_id,
+                method=method,
+                path=path,
+                ms=elapsed_ms,
+                error=f"{type(exc).__name__}: {exc}",
+            )
+            raise
+        elapsed_ms = int((time.monotonic() - start) * 1000)
         if self._rate_limiter is not None:
             self._rate_limiter.record(response.headers)
-        if response.status_code >= 400:
-            raise _map_fault(response)
+        status = response.status_code
+        rate_limit = self._rate_limit_snapshot()
+        if status >= 400:
+            error = _map_fault(response)
+            if status == 429:
+                # Expected back-pressure; the worker cools down. Not an alarm.
+                log.info("%s %s -> 429 (rate limited; cooling down)", method, path)
+            elif status >= 500:
+                log.error("%s %s -> %d (%dms): %s", method, path, status, elapsed_ms, error.message)
+            else:
+                log.warning(
+                    "%s %s -> %d (%dms): %s", method, path, status, elapsed_ms, error.message
+                )
+            audit.emit(
+                "strava",
+                "response",
+                req_id=req_id,
+                method=method,
+                path=path,
+                status=status,
+                ms=elapsed_ms,
+                rate_limit=rate_limit,
+                error=f"{type(error).__name__}: {error.message}",
+            )
+            raise error
+        log.info("%s %s -> %d (%dms)", method, path, status, elapsed_ms)
+        audit.emit(
+            "strava",
+            "response",
+            req_id=req_id,
+            method=method,
+            path=path,
+            status=status,
+            ms=elapsed_ms,
+            rate_limit=rate_limit,
+        )
         if not response.content:
             return None
         return response.json()

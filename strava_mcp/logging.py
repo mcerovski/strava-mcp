@@ -28,10 +28,19 @@ _REDACTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
 REDACTED = "[REDACTED]"
 
 
-def _scrub(text: str) -> str:
+def scrub(text: str) -> str:
+    """Redact token/secret-shaped substrings.
+
+    The single source of truth for redaction, reused by the audit sink
+    (research R3). Promoted from the private ``_scrub``.
+    """
     for pattern, repl in _REDACTION_PATTERNS:
         text = pattern.sub(repl, text)
     return text
+
+
+# Backward-compatible alias (kept for existing callers/tests).
+_scrub = scrub
 
 
 class RedactionFilter(logging.Filter):
@@ -49,17 +58,33 @@ class RedactionFilter(logging.Filter):
 
     @staticmethod
     def _scrub_arg(value: object) -> object:
-        return _scrub(value) if isinstance(value, str) else value
+        return scrub(value) if isinstance(value, str) else value
 
 
-def setup_logging(log_path: Path | str, *, level: int = logging.INFO) -> logging.Logger:
+def _resolve_level(level: int | str) -> tuple[int, str | None]:
+    """Return (numeric level, invalid-name-or-None).
+
+    A name is looked up case-insensitively; an unknown name falls back to INFO
+    and is reported back so the caller can warn once.
+    """
+    if isinstance(level, int):
+        return level, None
+    resolved = logging.getLevelName(level.upper())
+    if isinstance(resolved, int):
+        return resolved, None
+    return logging.INFO, level
+
+
+def setup_logging(log_path: Path | str, *, level: int | str = "INFO") -> logging.Logger:
     """Configure the ``strava_mcp`` logger with stdout + rotating-file sinks.
 
     The log file is written to ``log_path`` (``./.logs/strava-mcp.log`` by default).
-    Idempotent: repeated calls do not stack handlers.
+    ``level`` accepts a name ("DEBUG"/"INFO"/...) or an int; an unknown name falls
+    back to INFO and logs one warning. Idempotent: repeated calls do not stack handlers.
     """
+    numeric_level, invalid_name = _resolve_level(level)
     logger = logging.getLogger("strava_mcp")
-    logger.setLevel(level)
+    logger.setLevel(numeric_level)
     logger.propagate = False
     if logger.handlers:
         return logger
@@ -80,6 +105,8 @@ def setup_logging(log_path: Path | str, *, level: int = logging.INFO) -> logging
 
     logger.addHandler(stream)
     logger.addHandler(rotating)
+    if invalid_name is not None:
+        logger.warning("unknown log level %r; falling back to INFO", invalid_name)
     return logger
 
 

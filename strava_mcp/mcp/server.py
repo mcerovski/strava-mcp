@@ -8,11 +8,16 @@ Tool functions are pure DB reads; only the worker calls Strava.
 
 from __future__ import annotations
 
+import functools
+import inspect
 import sys
 import threading
+import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
+from strava_mcp import audit
 from strava_mcp.auth import missing_scopes
 from strava_mcp.auth.tokens import TokenStore
 from strava_mcp.config import Settings, get_settings
@@ -28,6 +33,55 @@ from strava_mcp.mcp.tools import summaries as summary_tools
 from strava_mcp.mcp.tools import sync as sync_tools
 
 log = get_logger()
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+
+def instrument(name: str) -> Callable[[_F], _F]:
+    """Wrap a tool callable to time, log, and audit each invocation.
+
+    Transparent: it opens a ``correlation_scope`` and emits an ``mcp`` request +
+    response audit event, logs INFO on success / ERROR on exception, and re-raises
+    unchanged so the tool's return shape and FastMCP error handling are untouched
+    (Constitution III, research R5). Applied *before* ``@mcp.tool``.
+    """
+
+    def decorator(fn: _F) -> _F:
+        sig = inspect.signature(fn)
+
+        @functools.wraps(fn)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            try:
+                bound = sig.bind(*args, **kwargs)
+                bound.apply_defaults()
+                arg_summary = audit.summarize_args(dict(bound.arguments))
+            except TypeError:
+                arg_summary = audit.summarize_args(dict(kwargs))
+            with audit.correlation_scope():
+                audit.emit("mcp", "request", tool=name, args=arg_summary)
+                start = time.monotonic()
+                try:
+                    result = fn(*args, **kwargs)
+                except Exception as exc:
+                    ms = int((time.monotonic() - start) * 1000)
+                    log.error("tool %s failed (%dms): %s", name, ms, exc)
+                    audit.emit(
+                        "mcp",
+                        "response",
+                        tool=name,
+                        status="error",
+                        ms=ms,
+                        error=f"{type(exc).__name__}: {exc}",
+                    )
+                    raise
+                ms = int((time.monotonic() - start) * 1000)
+                log.info("tool %s ok (%dms)", name, ms)
+                audit.emit("mcp", "response", tool=name, status="ok", ms=ms)
+                return result
+
+        return wrapper  # type: ignore[return-value]
+
+    return decorator
 
 
 def check_scopes(settings: Settings) -> list[str]:
@@ -65,11 +119,13 @@ def register_tools(mcp, db_path: Path | str, poll_event=None) -> None:  # type: 
     """
 
     @mcp.tool
+    @instrument("get_athlete")
     def get_athlete() -> dict[str, Any]:
         """Return the mirrored athlete profile, zones, and stats."""
         return athlete_tools.get_athlete(db_path)
 
     @mcp.tool
+    @instrument("list_activities")
     def list_activities(
         after: str | int | None = None,
         before: str | int | None = None,
@@ -82,71 +138,85 @@ def register_tools(mcp, db_path: Path | str, poll_event=None) -> None:  # type: 
         )
 
     @mcp.tool
+    @instrument("get_activity")
     def get_activity(id: int) -> dict[str, Any]:
         """Return the full detail for one enriched activity."""
         return activity_tools.get_activity(db_path, id)
 
     @mcp.tool
+    @instrument("get_laps")
     def get_laps(id: int) -> object:
         """Return the laps for one enriched activity."""
         return activity_tools.get_laps(db_path, id)
 
     @mcp.tool
+    @instrument("get_activity_zones")
     def get_activity_zones(id: int) -> object:
         """Return the heart-rate/power zones for one enriched activity."""
         return activity_tools.get_activity_zones(db_path, id)
 
     @mcp.tool
+    @instrument("get_activity_streams")
     def get_activity_streams(id: int, keys: list[str] | None = None) -> dict[str, Any]:
         """Return the stored streams for one enriched activity (optionally filtered)."""
         return stream_tools.get_activity_streams(db_path, id, keys)
 
     @mcp.tool
+    @instrument("list_gear")
     def list_gear() -> list[dict[str, Any]]:
         """List the athlete's gear (bikes and shoes)."""
         return gear_tools.list_gear(db_path)
 
     @mcp.tool
+    @instrument("get_gear")
     def get_gear(id: str) -> dict[str, Any]:
         """Return one gear item by id."""
         return gear_tools.get_gear(db_path, id)
 
     @mcp.tool
+    @instrument("list_routes")
     def list_routes() -> list[dict[str, Any]]:
         """List the athlete's routes (metadata + polyline)."""
         return route_tools.list_routes(db_path)
 
     @mcp.tool
+    @instrument("get_route")
     def get_route(id: str) -> dict[str, Any]:
         """Return one route by id (metadata + polyline)."""
         return route_tools.get_route(db_path, id)
 
     @mcp.tool
+    @instrument("list_starred_segments")
     def list_starred_segments() -> list[dict[str, Any]]:
         """List the athlete's starred segments (full detail)."""
         return segment_tools.list_starred_segments(db_path)
 
     @mcp.tool
+    @instrument("get_segment")
     def get_segment(id: int) -> dict[str, Any]:
         """Return a segment: full detail if starred, else encountered summary."""
         return segment_tools.get_segment(db_path, id)
 
     @mcp.tool
+    @instrument("list_segment_efforts")
     def list_segment_efforts(segment_id: int) -> list[dict[str, Any]]:
         """Return the athlete's efforts on a given segment."""
         return segment_tools.list_segment_efforts(db_path, segment_id)
 
     @mcp.tool
+    @instrument("sync_status")
     def sync_status() -> dict[str, Any]:
         """Report backfill/poll progress, counts, rate budget, and cooldown."""
         return sync_tools.sync_status(db_path)
 
     @mcp.tool
+    @instrument("sync_now")
     def sync_now() -> dict[str, Any]:
         """Nudge the worker to run the forward POLL immediately."""
         return sync_tools.sync_now(db_path, poll_event)
 
     @mcp.tool
+    @instrument("summarize_training")
     def summarize_training(
         period: str = "weekly", sport_type: str | None = None
     ) -> list[dict[str, Any]]:
@@ -171,7 +241,17 @@ def _prewarm_http_stack() -> None:
 def run_server(settings: Settings | None = None) -> int:
     """Entry point for ``strava-mcp serve``."""
     settings = settings or get_settings()
-    setup_logging(settings.strava_log_path)
+    setup_logging(settings.strava_log_path, level=settings.strava_log_level)
+    audit.setup_audit(settings.strava_audit_path)
+    log.info(
+        "serve config: mcp=%s:%s db=%s log=%s audit=%s level=%s",
+        settings.mcp_host,
+        settings.mcp_port,
+        settings.strava_db_path,
+        settings.strava_log_path,
+        settings.strava_audit_path,
+        settings.strava_log_level,
+    )
 
     absent = check_scopes(settings)
     if absent:

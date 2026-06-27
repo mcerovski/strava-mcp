@@ -49,6 +49,8 @@ class Settings(BaseSettings):
 
     # --- Logging ---
     strava_log_path: str = "./.logs/strava-mcp.log"
+    strava_log_level: str = "INFO"
+    strava_audit_path: str = "./.logs/audit.log"
 
     # --- MCP HTTP server ---
     mcp_host: str = "127.0.0.1"
