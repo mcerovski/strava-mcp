@@ -1,0 +1,105 @@
+# strava-mcp — self-hosted stack for Dokploy / plain `docker compose`.
+#
+# Components:
+#   mcp        FastMCP streamable-http server + background Strava sync worker (writer)
+#   dashboard  read-only web UI over the same mirror (reader)
+#   strava-data  shared named volume holding the SQLite DB + logs (the "database")
+#
+# SQLite is embedded, so there is no separate database container: both services
+# share one file through the `strava-data` volume (mcp is the sole writer).
+#
+# First-run auth (one time, populates the token in the shared DB):
+#   docker compose --profile auth run --rm --service-ports auth
+# Then bring up the long-running services:
+#   docker compose up -d
+
+services:
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: strava-mcp:latest
+    restart: unless-stopped
+    command: ["serve"]
+    env_file:
+      - .env
+    environment:
+      # Bind to all interfaces inside the container so Dokploy/Traefik (or a
+      # published port) can reach it; loopback-only defaults won't work here.
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8720"
+      STRAVA_DB_PATH: /data/db/strava.db
+      STRAVA_LOG_PATH: /data/logs/strava-mcp.log
+      STRAVA_AUDIT_PATH: /data/logs/audit.log
+    volumes:
+      - strava-data:/data
+    ports:
+      # Dokploy users can drop this and route a domain to container port 8720
+      # via the UI instead of publishing the port on the host.
+      - "8720:8720"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket,sys; s=socket.create_connection(('127.0.0.1',8720),3); s.close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: strava-mcp:latest
+    restart: unless-stopped
+    command: ["dashboard"]
+    env_file:
+      - .env
+    environment:
+      DASHBOARD_HOST: 0.0.0.0
+      DASHBOARD_PORT: "8722"
+      STRAVA_DB_PATH: /data/db/strava.db
+      STRAVA_LOG_PATH: /data/logs/strava-mcp.log
+      STRAVA_AUDIT_PATH: /data/logs/audit.log
+    volumes:
+      # Reader only; the DB file lives on the shared volume created by `mcp`.
+      - strava-data:/data
+    ports:
+      - "8722:8722"
+    depends_on:
+      # The dashboard refuses to start if the mirror DB does not exist yet, so
+      # wait until `mcp` has created and is serving it.
+      mcp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8722/',timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # One-off interactive OAuth. Not started by `up`; run it once with:
+  #   docker compose --profile auth run --rm --service-ports auth
+  # Set OAUTH_REDIRECT_HOST/PORT + your Strava app's callback domain to a value
+  # the browser you authorize from can reach the published port on.
+  auth:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: strava-mcp:latest
+    profiles: ["auth"]
+    command: ["auth"]
+    env_file:
+      - .env
+    environment:
+      OAUTH_REDIRECT_HOST: 0.0.0.0
+      OAUTH_REDIRECT_PORT: "8721"
+      STRAVA_DB_PATH: /data/db/strava.db
+      STRAVA_LOG_PATH: /data/logs/strava-mcp.log
+      STRAVA_AUDIT_PATH: /data/logs/audit.log
+    volumes:
+      - strava-data:/data
+    ports:
+      - "8721:8721"
+
+volumes:
+  strava-data:
+    driver: local

@@ -58,6 +58,8 @@ Key settings (see `.env.example` for all):
 | `MCP_HOST` / `MCP_PORT` | `127.0.0.1` / `8720` | MCP HTTP bind (loopback only). |
 | `OAUTH_REDIRECT_PORT` | `8721` | Local OAuth callback port. |
 | `SYNC_MAX_REQUESTS` | `900` | Per-window request ceiling the worker self-limits to. |
+| `STRAVA_LOG_LEVEL` | `INFO` | Human log verbosity (`DEBUG`/`INFO`/`WARNING`/`ERROR`). |
+| `STRAVA_AUDIT_PATH` | `./.logs/audit.log` | Structured JSONL audit trail path. |
 
 Secrets live only under `.env` and `./.database/` (both gitignored) and are
 **never logged**. `.env` holds only the app **client credentials**
@@ -109,6 +111,45 @@ The UI is fully offline (no external assets), shows no GPS map in v1, and render
 no tokens or secrets. If the mirror does not exist yet it prints
 `run uv run strava-mcp serve` rather than failing opaquely.
 
+## Logging & Observability
+
+Two independent sinks are written on every request — never to the mirror DB:
+
+### Human-readable log — `./.logs/strava-mcp.log`
+
+Rotated at 2 MB × 3 segments. Carries one line per event at the right severity:
+
+| Severity | Situation |
+|----------|-----------|
+| `DEBUG`  | Per-request Strava call (method, path, params) |
+| `INFO`   | Successful Strava response, tool ok, dashboard request, startup config |
+| `WARNING`| 4xx Strava error |
+| `ERROR`  | 5xx / transport error, tool exception, scope check failure |
+
+Set `STRAVA_LOG_LEVEL=DEBUG` to surface per-request Strava lines during a backfill;
+the default `INFO` keeps the log readable in steady state.
+
+### Structured audit trail — `./.logs/audit.log`
+
+Rotated at 2 MB × 3 segments. One JSON object per line (JSONL). Three streams:
+
+| Stream | Events | Key fields |
+|--------|--------|------------|
+| `mcp` | `request`, `response` | `tool`, `args` (req); `tool`, `status`, `ms`, `error?` (resp) |
+| `strava` | `request`, `response` | `method`, `path`, `query?` (req); `status?`, `ms`, `rate_limit?`, `error?` (resp) |
+| `dashboard` | `interaction` | `method`, `path`, `query?`, `status`, `ms`, `client` |
+
+Every line carries four mandatory fields: `ts` (UTC ISO-8601), `stream`, `event`, and
+`req_id` (8 hex chars). Events of one logical operation share a `req_id` — for example,
+all Strava calls made while enriching one activity carry the same `req_id`.
+
+Both sinks apply **secret redaction** before writing: bearer tokens, access/refresh
+tokens, client secrets, and 32+ hex blobs are replaced with `[REDACTED]`. The audit
+sink is **best-effort**: a write failure is silently caught and never breaks the
+observed operation.
+
+Configure the audit path with `STRAVA_AUDIT_PATH` (default `./.logs/audit.log`).
+
 ## Run as a service (systemd)
 
 To keep `serve` and the `dashboard` running on a VPS — restarting on crash and
@@ -157,7 +198,7 @@ loginctl show-user <user> -p Linger    # expect: Linger=yes
 Useful operations:
 
 ```bash
-journalctl --user -u strava-mcp -f                       # follow logs (also ./.database/strava-mcp.log)
+journalctl --user -u strava-mcp -f                       # follow logs (also ./.logs/strava-mcp.log)
 systemctl --user restart strava-mcp strava-mcp-dashboard  # after pulling new code
 ```
 

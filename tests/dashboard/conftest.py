@@ -2,10 +2,38 @@
 
 from __future__ import annotations
 
+import io
 import sqlite3
+import types
+from pathlib import Path
 from typing import Any
 
+from strava_mcp.dashboard.server import DashboardHandler
 from strava_mcp.db.repositories.activities import ActivitiesRepository
+
+
+def invoke_request(
+    db_path: Path | str,
+    path: str,
+    *,
+    command: str = "GET",
+    client_address: tuple[str, int] = ("127.0.0.1", 54321),
+) -> DashboardHandler:
+    """Drive one dashboard request in-process (no socket) and return the handler.
+
+    Builds a ``DashboardHandler`` with in-memory file objects so ``do_GET`` runs to
+    completion deterministically — including its request-logging/audit ``finally``.
+    """
+    handler = DashboardHandler.__new__(DashboardHandler)
+    handler.server = types.SimpleNamespace(db_path=db_path)  # type: ignore[assignment]
+    handler.path = path
+    handler.command = command
+    handler.client_address = client_address
+    handler.request_version = "HTTP/1.1"
+    handler.requestline = f"{command} {path} HTTP/1.1"
+    handler.wfile = io.BytesIO()  # type: ignore[assignment]
+    handler.do_GET()
+    return handler
 
 
 def make_activity(

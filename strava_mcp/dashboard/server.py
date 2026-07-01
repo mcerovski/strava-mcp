@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+from strava_mcp import audit
 from strava_mcp.config import Settings, get_settings
 from strava_mcp.dashboard import handlers
 from strava_mcp.logging import get_logger, setup_logging
@@ -47,6 +49,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         log.debug("dashboard %s - %s", self.address_string(), fmt % args)
 
     def _send(self, status: int, body: str, content_type: str = "text/html; charset=utf-8") -> None:
+        self._sent_status = status  # captured for the per-request log/audit line
         payload = body.encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", content_type)
@@ -64,30 +67,56 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self._send(200, css, "text/css; charset=utf-8")
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib signature
+        start = time.monotonic()
+        self._sent_status = 500  # overwritten by _send; 500 if we never get there
         parts = urlsplit(self.path)
         path = parts.path
         params = parse_qs(parts.query)
         db = self._db_path
 
-        try:
-            if path == "/static/app.css":
-                self._serve_css()
-                return
-            if path == "/":
-                status, html = handlers.handle_list(db, params)
-            elif path in ("/timeline", "/timeline/"):
-                status, html = handlers.handle_timeline(db, params)
-            elif path in ("/sync", "/sync/"):
-                status, html = handlers.handle_sync(db)
-            elif (m := _ACTIVITY_RE.match(path)) is not None:
-                status, html = handlers.handle_detail(db, int(m.group(1)))
-            else:
-                status, html = handlers.handle_not_found(db, path)
-        except Exception:  # pragma: no cover - defensive; never leak a stack trace
-            log.exception("dashboard request failed: %s", path)
-            self._send(500, "<h1>Internal error</h1><p>See the server log.</p>")
-            return
-        self._send(status, html)
+        with audit.correlation_scope():
+            try:
+                if path == "/static/app.css":
+                    self._serve_css()
+                    return
+                if path == "/":
+                    status, html = handlers.handle_list(db, params)
+                elif path in ("/timeline", "/timeline/"):
+                    status, html = handlers.handle_timeline(db, params)
+                elif path in ("/sync", "/sync/"):
+                    status, html = handlers.handle_sync(db)
+                elif (m := _ACTIVITY_RE.match(path)) is not None:
+                    status, html = handlers.handle_detail(db, int(m.group(1)))
+                else:
+                    status, html = handlers.handle_not_found(db, path)
+                self._send(status, html)
+            except Exception:  # pragma: no cover - defensive; never leak a stack trace
+                log.exception("dashboard request failed: %s", path)
+                self._send(500, "<h1>Internal error</h1><p>See the server log.</p>")
+            finally:
+                elapsed_ms = int((time.monotonic() - start) * 1000)
+                log.info(
+                    "%s %s -> %s (%dms) %s",
+                    self.command,
+                    path,
+                    self._sent_status,
+                    elapsed_ms,
+                    self.address_string(),
+                )
+                # Flatten single-value query params, then sanitize (never verbatim).
+                query = audit.summarize_args(
+                    {k: (v[0] if len(v) == 1 else v) for k, v in params.items()}
+                )
+                audit.emit(
+                    "dashboard",
+                    "interaction",
+                    method=self.command,
+                    path=path,
+                    query=query,
+                    status=self._sent_status,
+                    ms=elapsed_ms,
+                    client=self.address_string(),
+                )
 
     def do_HEAD(self) -> None:  # noqa: N802 - stdlib signature
         self.do_GET()
@@ -106,7 +135,17 @@ def _verify_db(db_path: Path | str) -> bool:
 def run_dashboard(settings: Settings | None = None) -> int:
     """Entry point for ``strava-mcp dashboard``."""
     settings = settings or get_settings()
-    setup_logging(settings.strava_log_path)
+    setup_logging(settings.strava_log_path, level=settings.strava_log_level)
+    audit.setup_audit(settings.strava_audit_path)
+    log.info(
+        "dashboard config: bind=%s:%s db=%s log=%s audit=%s level=%s",
+        settings.dashboard_host,
+        settings.dashboard_port,
+        settings.strava_db_path,
+        settings.strava_log_path,
+        settings.strava_audit_path,
+        settings.strava_log_level,
+    )
 
     if not _verify_db(settings.strava_db_path):
         print(

@@ -17,6 +17,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
+from strava_mcp import audit
 from strava_mcp.client.ratelimit import (
     BudgetExhausted,
     RateLimitBudget,
@@ -192,18 +193,22 @@ class Orchestrator:
     def _run_with_cooldown(self, fn: Callable[[], object], *, label: str) -> None:
         """Run ``fn``, cooling down + retrying on rate limits; log-and-skip otherwise.
 
-        The callable's return value is ignored.
+        The callable's return value is ignored. The whole unit runs under one
+        ``correlation_scope`` so every Strava call it makes shares a ``req_id``
+        (e.g. one activity's detail/laps/zones/streams GETs — FR-008, SC-006).
         """
-        while not self.stop_event.is_set():
-            try:
-                fn()
-                return
-            except Exception as exc:  # noqa: BLE001 - retried or logged-and-skipped
-                if self._is_rate_limit(exc):
-                    self._cooldown(exc)
-                    continue
-                log.warning("%s failed: %s", label, exc)
-                return
+        with audit.correlation_scope():
+            while not self.stop_event.is_set():
+                try:
+                    fn()
+                    return
+                except Exception as exc:  # noqa: BLE001 - retried or logged-and-skipped
+                    if self._is_rate_limit(exc):
+                        self._cooldown(exc)
+                        continue
+                    # Swallowed (skip-and-continue) but with full diagnostic context.
+                    log.exception("%s failed; skipping", label)
+                    return
 
     # --- poll (US7) --------------------------------------------------------
     def poll(self) -> list[int]:

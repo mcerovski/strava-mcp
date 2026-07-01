@@ -43,3 +43,10 @@ def test_legacy_env_token_keys_load_without_error() -> None:
 def test_client_credentials_are_retained() -> None:
     assert "strava_client_id" in Settings.model_fields
     assert "strava_client_secret" in Settings.model_fields
+
+
+def test_observability_defaults() -> None:
+    # T007: the new logging/audit settings carry sensible defaults.
+    settings = Settings(strava_client_id="c", strava_client_secret="s", _env_file=None)  # type: ignore[call-arg]
+    assert settings.strava_log_level == "INFO"
+    assert settings.strava_audit_path == "./.logs/audit.log"
