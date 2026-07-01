@@ -1,0 +1,39 @@
+# Version control / IDE
+.git
+.gitignore
+.serena
+.claude
+.vscode
+.idea
+
+# Python caches / build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+build/
+dist/
+
+# Local runtime state — never bake into the image
+.env
+.venv/
+.database/
+.logs/
+*.db
+*.db-wal
+*.db-shm
+
+# Tests, specs and docs are not needed at runtime
+tests/
+specs/
+docs/
+strava-api-spec/
+*.md
+!README.md
+
+# Docker files themselves
+Dockerfile
+.dockerignore
+docker-compose*.yml
