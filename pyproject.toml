@@ -5,7 +5,7 @@ description = "Locally-run MCP server that mirrors one athlete's Strava data and
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "fastmcp>=3.4.7",
+    "fastmcp>=4.0.10",
     "httpx>=0.27",
     "pydantic-settings>=2.15.0",
 ]
@@ -16,8 +16,8 @@ strava-mcp = "strava_mcp.__main__:main"
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
-    "ruff>=0.16.5",
-    "mypy>=2.3.1",
+    "ruff>=0.16.10",
+    "mypy>=2.4.0",
 ]
 
 [build-system]
